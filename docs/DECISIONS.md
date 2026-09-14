@@ -182,3 +182,27 @@ This is also a better answer to the long-running *"Custom Image Component"* requ
 (15 comments on `react-native-image-viewing`) than auto-detection would have been: the
 same prop accepts `expo-image`, `FastImage`, or a CDN-aware wrapper of the user's own,
 and it is typed.
+
+---
+
+## D-010 — `ImageComponent` is typed loosely, on purpose
+
+The first version typed the prop as `ComponentType<ImageComponentProps>`. That is the
+honest contract, and it does not work: passing `expo-image`'s `Image` fails to typecheck.
+
+Two independent reasons, both from the other library's types being *broader* than ours:
+
+- `expo-image` types `style` as `ImageStyle`, which narrows `overflow` to
+  `visible | hidden`, while `ViewStyle` also allows `scroll`. (Fixed properly — the style
+  really should have been `ImageStyle`.)
+- `expo-image` types `source` as a union of ~9,000 members including `undefined` and a
+  long list of SF Symbol string literals. Nothing narrow is assignable to it.
+
+`FastImage` has its own third shape. So an exact prop type means every real image library
+needs a cast at the call site — and an escape hatch that demands a cast is not much of an
+escape hatch. The prop is therefore `ImageRenderer = ComponentType<any>`, with
+`ImageComponentProps` still exported and documented as the contract to implement.
+
+What is lost: passing a component that could not possibly render an image is not a type
+error. What is kept: anyone writing their own renderer against `ImageComponentProps` gets
+full checking on it, and every real image library assigns with no ceremony.

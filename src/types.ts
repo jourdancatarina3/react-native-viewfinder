@@ -1,5 +1,10 @@
 import type { ComponentType, ReactNode } from 'react';
-import type { AccessibilityProps, StyleProp, ViewStyle } from 'react-native';
+import type {
+  AccessibilityProps,
+  ImageStyle,
+  StyleProp,
+  ViewStyle,
+} from 'react-native';
 import type { Transform } from './core/types';
 
 export type { Size, Transform, Vector } from './core/types';
@@ -58,12 +63,17 @@ export type ImageInput = ImageSource | GalleryImage;
 /**
  * The props the library passes to whatever component renders an image.
  *
- * Both React Native's `Image` and `expo-image`'s `Image` satisfy this, as does
- * any wrapper of your own. See {@link ZoomableImageProps.ImageComponent}.
+ * This is the contract to implement when writing your own renderer. React
+ * Native's `Image`, `expo-image`'s `Image` and `FastImage` all accept these at
+ * runtime, though their own prop types are broader — see {@link ImageRenderer}.
  */
 export type ImageComponentProps = {
   source: { uri: string; headers?: Record<string, string> } | number;
-  style?: StyleProp<ViewStyle>;
+  /**
+   * Image styles rather than view styles: `expo-image` narrows `overflow` to
+   * `visible | hidden`, so a `ViewStyle` here would not be assignable to it.
+   */
+  style?: StyleProp<ImageStyle>;
   /** React Native's `Image` fit mode; ignored by `expo-image`. */
   resizeMode?: 'cover' | 'contain' | 'stretch' | 'repeat' | 'center';
   /** `expo-image`'s equivalent of `resizeMode`; ignored by RN's `Image`. */
@@ -76,6 +86,22 @@ export type ImageComponentProps = {
   accessibilityLabel?: string;
   testID?: string;
 };
+
+/**
+ * A component that can draw an image for the library.
+ *
+ * Deliberately loose. The precise contract is {@link ImageComponentProps}, but
+ * requiring an exact match would mean every real image library needed a cast:
+ * `expo-image` types `source` as a union of thousands of members including
+ * `undefined`, and `FastImage` has its own shape again. Neither is assignable
+ * to a narrow prop type, even though both render correctly.
+ *
+ * The trade is deliberate: an escape hatch that demands a cast is not much of
+ * an escape hatch. Implement {@link ImageComponentProps} and you get full
+ * checking on your own component's props.
+ */
+
+export type ImageRenderer = ComponentType<any>;
 
 /** How a transition should decide whether to animate. */
 export type ReduceMotionSetting =
@@ -198,7 +224,7 @@ export type ZoomableImageProps = ZoomBehaviourProps &
      * <ZoomableImage source={uri} ImageComponent={Image} />
      * ```
      */
-    ImageComponent?: ComponentType<ImageComponentProps>;
+    ImageComponent?: ImageRenderer;
     /** Replaces the default spinner shown while loading. */
     renderLoading?: () => ReactNode;
     /** Replaces the default message shown when loading fails. */
@@ -301,7 +327,7 @@ export type GalleryProps = ZoomBehaviourProps & {
    * Component used to render each image. Defaults to React Native's `Image`.
    * @see {@link ZoomableImageProps.ImageComponent}
    */
-  ImageComponent?: ComponentType<ImageComponentProps>;
+  ImageComponent?: ImageRenderer;
 
   /**
    * Whether dragging vertically dismisses the gallery. Only ever active when

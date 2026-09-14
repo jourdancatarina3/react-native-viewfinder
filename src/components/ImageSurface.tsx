@@ -13,6 +13,7 @@ import type {
   GalleryImage,
   ImageComponentProps,
   ImageLoadState,
+  ImageRenderer,
 } from '../types';
 
 export type ImageSurfaceProps = {
@@ -20,7 +21,7 @@ export type ImageSurfaceProps = {
   /** The fitted size to draw at. Zero until the natural size is known. */
   size: Size;
   state: ImageLoadState;
-  ImageComponent?: ComponentType<ImageComponentProps>;
+  ImageComponent?: ImageRenderer;
   onLoad?: (size: Size | null) => void;
   onError?: () => void;
   retry: () => void;

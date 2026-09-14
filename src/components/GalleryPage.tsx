@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo } from 'react';
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 import type { ReduceMotion } from 'react-native-reanimated';
 import Animated from 'react-native-reanimated';
@@ -8,11 +8,7 @@ import { GestureDetector } from '../compat/gestures';
 import type { Size } from '../core/types';
 import { useImageSize } from '../hooks/useImageSize';
 import { useZoomable } from '../hooks/useZoomable';
-import type {
-  GalleryImage,
-  ImageComponentProps,
-  ItemRenderContext,
-} from '../types';
+import type { GalleryImage, ImageRenderer, ItemRenderContext } from '../types';
 import { ImageSurface } from './ImageSurface';
 
 export type GalleryPageProps = {
@@ -31,7 +27,7 @@ export type GalleryPageProps = {
   panEnabled: boolean;
   reduceMotion: ReduceMotion;
 
-  ImageComponent?: ComponentType<ImageComponentProps>;
+  ImageComponent?: ImageRenderer;
   renderItem?: (context: ItemRenderContext) => ReactNode;
   renderLoading?: (context: ItemRenderContext) => ReactNode;
   renderError?: (context: ItemRenderContext) => ReactNode;

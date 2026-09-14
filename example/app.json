@@ -3,9 +3,9 @@
     "name": "Viewfinder Example",
     "slug": "react-native-viewfinder-example",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "viewfinder.example"
@@ -24,6 +24,7 @@
     },
     "plugins": [
       "expo-image"
-    ]
+    ],
+    "newArchEnabled": true
   }
 }

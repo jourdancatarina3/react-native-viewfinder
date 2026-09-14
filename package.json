@@ -16,6 +16,17 @@
         "default": "./lib/commonjs/index.js"
       }
     },
+    "./expo-image": {
+      "react-native-viewfinder-source": "./src/expo-image.tsx",
+      "import": {
+        "types": "./lib/typescript/module/src/expo-image.d.ts",
+        "default": "./lib/module/expo-image.js"
+      },
+      "require": {
+        "types": "./lib/typescript/commonjs/src/expo-image.d.ts",
+        "default": "./lib/commonjs/expo-image.js"
+      }
+    },
     "./package.json": "./package.json"
   },
   "files": [
