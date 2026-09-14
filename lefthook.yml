@@ -1,0 +1,29 @@
+# Pre-commit runs the fast checks on staged files only; pre-push runs the full
+# suite. See CONTRIBUTING.md.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: eslint
+      glob: '*.{js,ts,jsx,tsx}'
+      run: yarn eslint --fix {staged_files}
+      stage_fixed: true
+
+    - name: typecheck
+      glob: '*.{ts,tsx}'
+      run: yarn typecheck
+
+    - name: tests
+      glob: '*.{ts,tsx}'
+      run: yarn jest --bail --passWithNoTests --findRelatedTests {staged_files}
+
+pre-push:
+  jobs:
+    - name: typecheck
+      run: yarn typecheck
+
+    - name: lint
+      run: yarn lint
+
+    - name: test
+      run: yarn test

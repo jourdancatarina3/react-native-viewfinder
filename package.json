@@ -1,13 +1,15 @@
 {
   "name": "react-native-viewfinder",
   "version": "0.1.0",
-  "description": "Buttery-smooth pinch-to-zoom images and a full-screen gallery for React Native. Zero native code.",
-  "main": "./lib/module/index.js",
+  "description": "Buttery-smooth pinch-to-zoom images and a full-screen gallery for React Native. Zero native code, works on Reanimated 3 & 4 and Gesture Handler 2 & 3.",
+  "main": "./lib/commonjs/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
       "react-native-viewfinder-source": "./src/index.tsx",
       "types": "./lib/typescript/src/index.d.ts",
+      "import": "./lib/module/index.js",
+      "require": "./lib/commonjs/index.js",
       "default": "./lib/module/index.js"
     },
     "./package.json": "./package.json"
@@ -15,33 +17,45 @@
   "files": [
     "src",
     "lib",
-    "android",
-    "ios",
-    "cpp",
-    "*.podspec",
-    "react-native.config.js",
-    "!ios/build",
-    "!android/build",
-    "!android/gradle",
-    "!android/gradlew",
-    "!android/gradlew.bat",
-    "!android/local.properties",
     "!**/__tests__",
     "!**/__fixtures__",
     "!**/__mocks__",
+    "!**/*.test.ts",
+    "!**/*.test.tsx",
     "!**/.*"
   ],
   "scripts": {
     "example": "yarn workspace react-native-viewfinder-example",
-    "clean": "del-cli lib",
-    "prepare": "bob build",
+    "clean": "del-cli lib coverage",
+    "prepare": "bob build && lefthook install",
+    "build": "bob build",
     "typecheck": "tsc",
-    "lint": "eslint \"**/*.{js,ts,tsx}\""
+    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "lint:fix": "eslint \"**/*.{js,ts,tsx}\" --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "e2e": "maestro test e2e/",
+    "release": "release-it"
   },
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "expo",
+    "image",
+    "zoom",
+    "pinch-to-zoom",
+    "gallery",
+    "lightbox",
+    "image-viewer",
+    "photo-viewer",
+    "carousel",
+    "reanimated",
+    "gesture-handler",
+    "pan",
+    "double-tap",
+    "new-architecture"
   ],
   "repository": {
     "type": "git",
@@ -62,22 +76,39 @@
     "@eslint/js": "^9.39.5",
     "@react-native/babel-preset": "0.86.2",
     "@react-native/eslint-config": "0.86.2",
+    "@react-native/jest-preset": "0.86.2",
+    "@release-it/conventional-changelog": "^12.0.2",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
     "@types/react": "^19.2.0",
+    "@types/react-test-renderer": "^19",
+    "babel-jest": "^30.5.1",
     "del-cli": "^7.0.0",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-ft-flow": "^3.0.11",
     "eslint-plugin-prettier": "^5.5.6",
+    "expo-image": "~57.0.5",
+    "jest": "^30.5.1",
+    "lefthook": "^2.1.12",
     "prettier": "^3.9.6",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-builder-bob": "^0.43.1",
+    "react-native-gesture-handler": "2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-worklets": "0.10.1",
+    "react-test-renderer": "19.2.3",
+    "release-it": "^21.0.3",
     "turbo": "^2.10.8",
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
+    "expo-image": "*",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-gesture-handler": ">=2.16.0 || >=3.0.0",
+    "react-native-reanimated": ">=3.10.0 || >=4.0.0"
   },
   "workspaces": [
     "example"
@@ -87,6 +118,12 @@
     "source": "src",
     "output": "lib",
     "targets": [
+      [
+        "commonjs",
+        {
+          "esm": true
+        }
+      ],
       [
         "module",
         {
@@ -115,5 +152,12 @@
       "eslint"
     ],
     "version": "0.63.1"
+  },
+  "module": "./lib/module/index.js",
+  "sideEffects": false,
+  "peerDependenciesMeta": {
+    "expo-image": {
+      "optional": true
+    }
   }
 }
