@@ -1,3 +1,4 @@
+export { Gallery } from './components/Gallery';
 export { ZoomableImage } from './components/ZoomableImage';
 
 export type {

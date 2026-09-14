@@ -173,8 +173,13 @@ const impl = HAS_HOOK_GESTURE_API
         NS.useExclusiveGestures(...gestures),
     }
   : {
+      // Each builder is rebuilt when its *primitive* config changes — `enabled`
+      // above all, which a gallery toggles as pages become active. Callbacks are
+      // deliberately not dependencies: they are worklets recreated every render,
+      // so depending on them would rebuild the gesture on every frame. They are
+      // read at build time, which is why the exported hooks document that
+      // callbacks must read shared values rather than close over React state.
       pan: (config: PanConfig) =>
-        // `impl` is resolved once at module scope, so this branch is constant.
         useMemo(() => {
           const gesture = NS.Gesture.Pan();
           if (config.enabled !== undefined) gesture.enabled(config.enabled);
@@ -195,17 +200,24 @@ const impl = HAS_HOOK_GESTURE_API
           if (config.failOffsetY !== undefined)
             gesture.failOffsetY(config.failOffsetY);
           return applyLifecycle(gesture, config);
-
-          // worklets recreated every render; depending on them would rebuild the
-          // gesture on each frame. Config is treated as mount-time.
-        }, []),
+        }, [
+          config.enabled,
+          config.minPointers,
+          config.maxPointers,
+          config.minDistance,
+          config.averageTouches,
+          config.activeOffsetX,
+          config.activeOffsetY,
+          config.failOffsetX,
+          config.failOffsetY,
+        ]),
 
       pinch: (config: PinchConfig) =>
         useMemo(() => {
           const gesture = NS.Gesture.Pinch();
           if (config.enabled !== undefined) gesture.enabled(config.enabled);
           return applyLifecycle(gesture, config);
-        }, []),
+        }, [config.enabled]),
 
       tap: (config: TapConfig) =>
         useMemo(() => {
@@ -217,7 +229,12 @@ const impl = HAS_HOOK_GESTURE_API
             gesture.maxDistance(config.maxDistance);
           if (config.maxDelay !== undefined) gesture.maxDelay(config.maxDelay);
           return applyLifecycle(gesture, config);
-        }, []),
+        }, [
+          config.enabled,
+          config.numberOfTaps,
+          config.maxDistance,
+          config.maxDelay,
+        ]),
 
       longPress: (config: LongPressConfig) =>
         useMemo(() => {
@@ -228,7 +245,7 @@ const impl = HAS_HOOK_GESTURE_API
           if (config.maxDistance !== undefined)
             gesture.maxDistance(config.maxDistance);
           return applyLifecycle(gesture, config);
-        }, []),
+        }, [config.enabled, config.minDuration, config.maxDistance]),
 
       simultaneous: (gestures: AnyGesture[]) =>
         useMemo(() => NS.Gesture.Simultaneous(...gestures), gestures),

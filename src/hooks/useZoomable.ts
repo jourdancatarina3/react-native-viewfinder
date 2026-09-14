@@ -35,6 +35,7 @@ import {
   scaleAround,
   toCentreRelative,
 } from '../core/zoom';
+import { useStableCallback } from './useStableCallback';
 
 /** A worklet invoked while a pan is happening at the resting scale. */
 type RestPanHandler = (event: PanEvent) => void;
@@ -121,6 +122,14 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     onRestPanUpdate,
     onRestPanEnd,
   } = options;
+
+  // User callbacks are captured by worklets when the gesture is built, so they
+  // must not change identity afterwards or the gesture keeps calling the old
+  // one. These wrappers stay stable and dispatch to the latest handler.
+  const emitTap = useStableCallback(onTap);
+  const emitDoubleTap = useStableCallback(onDoubleTap);
+  const emitLongPress = useStableCallback(onLongPress);
+  const emitZoomChange = useStableCallback(onZoomChange);
 
   const scale = useSharedValue(minScale);
   const translateX = useSharedValue(0);
@@ -218,15 +227,11 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
   useAnimatedReaction(
     () => scale.value,
     (current, previous) => {
-      if (
-        onZoomChange &&
-        previous !== null &&
-        Math.abs(current - previous) > 0.01
-      ) {
-        runOnJS(onZoomChange)(current);
+      if (previous !== null && Math.abs(current - previous) > 0.01) {
+        runOnJS(emitZoomChange)(current);
       }
     },
-    [onZoomChange]
+    [emitZoomChange]
   );
 
   // Stop every animation on unmount. Without this, a spring still running when
@@ -415,9 +420,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
       translateX.value = withTiming(next.translateX, timing);
       translateY.value = withTiming(next.translateY, timing);
 
-      if (onDoubleTap) {
-        runOnJS(onDoubleTap)(next.scale);
-      }
+      runOnJS(emitDoubleTap)(next.scale);
     },
   });
 
@@ -427,9 +430,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     maxDistance: 20,
     onEnd: () => {
       'worklet';
-      if (onTap) {
-        runOnJS(onTap)();
-      }
+      runOnJS(emitTap)();
     },
   });
 
@@ -439,9 +440,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     maxDistance: 20,
     onStart: () => {
       'worklet';
-      if (onLongPress) {
-        runOnJS(onLongPress)();
-      }
+      runOnJS(emitLongPress)();
     },
   });
 

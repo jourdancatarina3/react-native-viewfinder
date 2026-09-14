@@ -137,8 +137,10 @@ export function useImageSize(item: GalleryImage): UseImageSizeResult {
         );
       }
     },
-    reportLoaded: () =>
-      setState((current) => (current === 'error' ? current : 'loaded')),
+    // Last event wins. A load arriving after an error means the image really did
+    // arrive — from a retry, or a slow second attempt by the image component —
+    // so the stale error must clear rather than stick.
+    reportLoaded: () => setState('loaded'),
     reportError: () => setState('error'),
     retry: () => {
       setState('loading');

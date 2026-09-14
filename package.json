@@ -3,14 +3,18 @@
   "version": "0.1.0",
   "description": "Buttery-smooth pinch-to-zoom images and a full-screen gallery for React Native. Zero native code, works on Reanimated 3 & 4 and Gesture Handler 2 & 3.",
   "main": "./lib/commonjs/index.js",
-  "types": "./lib/typescript/src/index.d.ts",
+  "types": "./lib/typescript/commonjs/src/index.d.ts",
   "exports": {
     ".": {
       "react-native-viewfinder-source": "./src/index.tsx",
-      "types": "./lib/typescript/src/index.d.ts",
-      "import": "./lib/module/index.js",
-      "require": "./lib/commonjs/index.js",
-      "default": "./lib/module/index.js"
+      "import": {
+        "types": "./lib/typescript/module/src/index.d.ts",
+        "default": "./lib/module/index.js"
+      },
+      "require": {
+        "types": "./lib/typescript/commonjs/src/index.d.ts",
+        "default": "./lib/commonjs/index.js"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -81,7 +85,6 @@
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.2.0",
-    "@types/react-test-renderer": "^19",
     "babel-jest": "^30.5.1",
     "del-cli": "^7.0.0",
     "eslint": "^9.39.5",
@@ -98,8 +101,8 @@
     "react-native-gesture-handler": "2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-worklets": "0.10.1",
-    "react-test-renderer": "19.2.3",
     "release-it": "^21.0.3",
+    "test-renderer": "^1.2.0",
     "turbo": "^2.10.8",
     "typescript": "^6.0.3"
   },
