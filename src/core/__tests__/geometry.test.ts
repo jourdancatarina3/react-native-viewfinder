@@ -101,9 +101,9 @@ describe('fitSize', () => {
       width: 0,
       height: 0,
     });
-    expect(fitSize({ width: 100, height: 100 }, { width: 0, height: 0 })).toEqual(
-      { width: 0, height: 0 }
-    );
+    expect(
+      fitSize({ width: 100, height: 100 }, { width: 0, height: 0 })
+    ).toEqual({ width: 0, height: 0 });
     expect(fitSize({ width: NaN, height: 10 }, PHONE)).toEqual({
       width: 0,
       height: 0,
@@ -209,7 +209,9 @@ describe('clamp', () => {
 describe('nativeResolutionScale', () => {
   it('is the factor between fitted and natural width', () => {
     // 1000x500 fits to 400x200, so 1:1 needs 2.5x
-    expect(nativeResolutionScale({ width: 1000, height: 500 }, PHONE)).toBe(2.5);
+    expect(nativeResolutionScale({ width: 1000, height: 500 }, PHONE)).toBe(
+      2.5
+    );
   });
 
   it('is below 1 for an image smaller than the container', () => {
@@ -221,7 +223,10 @@ describe('nativeResolutionScale', () => {
   it('returns 1 for unusable sizes', () => {
     expect(nativeResolutionScale({ width: 0, height: 0 }, PHONE)).toBe(1);
     expect(
-      nativeResolutionScale({ width: 100, height: 100 }, { width: 0, height: 0 })
+      nativeResolutionScale(
+        { width: 100, height: 100 },
+        { width: 0, height: 0 }
+      )
     ).toBe(1);
   });
 });
@@ -233,13 +238,15 @@ describe('resolveMaxScale', () => {
 
   it('raises the ceiling so a large image reaches 1:1', () => {
     // 8000 wide fits to 400 -> needs 20x for 1:1, but the cap is 16
-    expect(resolveMaxScale(6, { width: 8000, height: 6000 }, PHONE, 1)).toBe(16);
+    expect(resolveMaxScale(6, { width: 8000, height: 6000 }, PHONE, 1)).toBe(
+      16
+    );
   });
 
   it('respects a custom native cap', () => {
-    expect(resolveMaxScale(6, { width: 8000, height: 6000 }, PHONE, 1, 10)).toBe(
-      10
-    );
+    expect(
+      resolveMaxScale(6, { width: 8000, height: 6000 }, PHONE, 1, 10)
+    ).toBe(10);
   });
 
   it('never returns less than minScale', () => {

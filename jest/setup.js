@@ -1,5 +1,3 @@
-/* eslint-env jest */
-
 // Reanimated ships a Jest mock that emulates shared values and animations on the
 // JS thread. Without it, every `useSharedValue` call throws.
 require('react-native-reanimated').setUpTests?.();

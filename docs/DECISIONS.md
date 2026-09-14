@@ -138,3 +138,47 @@ max when previously zoomed it and get back to it", "the image is in a zoom-in st
 swiping back").
 
 `ZoomableImage` used standalone keeps its zoom, since there is nothing to swipe away from.
+
+---
+
+## D-009 — `expo-image` is opted into explicitly, not detected at runtime
+
+The obvious implementation of "use `expo-image` when it is installed" is a guarded
+require:
+
+```ts
+try { ExpoImage = require('expo-image').Image; } catch { ExpoImage = null; }
+```
+
+This does not work under Metro, and the failure mode is the bad one. Metro resolves
+`require()` calls **statically, at bundle time**, and a `try`/`catch` around one does not
+make it optional: an app without `expo-image` fails to bundle with *"Unable to resolve
+module expo-image"* — a build error, in the consumer's app, that the `catch` never sees.
+Making the specifier dynamic (`require(name)`) inverts the problem: Metro then cannot
+resolve it *ever*, so the module is never bundled and the import fails even for apps that
+do have `expo-image`.
+
+There is no variant that is both automatic and safe. So the library does it explicitly,
+two ways:
+
+1. **An `ImageComponent` prop**, defaulting to React Native's `Image`:
+
+   ```tsx
+   import { Image } from 'expo-image';
+   <Gallery images={images} ImageComponent={Image} />
+   ```
+
+2. **A pre-wired subpath export** for people who want no configuration at all:
+
+   ```tsx
+   import { Gallery } from 'react-native-viewfinder/expo-image';
+   ```
+
+   That module statically imports `expo-image`, which is safe precisely because you only
+   reach it by importing the subpath — an app without `expo-image` never pulls it into the
+   graph.
+
+This is also a better answer to the long-running *"Custom Image Component"* request
+(15 comments on `react-native-image-viewing`) than auto-detection would have been: the
+same prop accepts `expo-image`, `FastImage`, or a CDN-aware wrapper of the user's own,
+and it is typed.

@@ -23,6 +23,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "resolveJsonModule": true,
+    "types": ["jest"],
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",

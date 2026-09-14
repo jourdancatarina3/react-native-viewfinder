@@ -56,10 +56,12 @@ describe('toCentreRelative', () => {
   });
 
   it('returns the origin for an unmeasured container', () => {
-    expect(toCentreRelative({ x: 10, y: 10 }, { width: 0, height: 0 })).toEqual({
-      x: 0,
-      y: 0,
-    });
+    expect(toCentreRelative({ x: 10, y: 10 }, { width: 0, height: 0 })).toEqual(
+      {
+        x: 0,
+        y: 0,
+      }
+    );
   });
 });
 
@@ -311,7 +313,15 @@ describe('doubleTapTransform', () => {
   });
 
   it('respects a maxScale lower than the configured level', () => {
-    const result = doubleTapTransform(rest, { x: 200, y: 400 }, BASE, PHONE, [8], 1, 3);
+    const result = doubleTapTransform(
+      rest,
+      { x: 200, y: 400 },
+      BASE,
+      PHONE,
+      [8],
+      1,
+      3
+    );
     expect(result.scale).toBe(3);
   });
 

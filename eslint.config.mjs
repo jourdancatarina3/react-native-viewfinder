@@ -24,6 +24,42 @@ export default defineConfig([
     },
   },
   {
-    ignores: ['node_modules/', 'lib/'],
+    // The Gesture Handler adapter deliberately violates two hook rules, and it
+    // is the only file in the project allowed to. See docs/DECISIONS.md D-003.
+    //
+    // `rules-of-hooks`: the v2 branch calls `useMemo` inside plain functions
+    // that ESLint cannot see are only ever invoked from the exported `useX`
+    // wrappers. The v3 branch calls RGH's own hooks through a namespace object,
+    // which ESLint also cannot follow. Both are hooks called unconditionally
+    // from hooks — the rule simply cannot prove it.
+    //
+    // `exhaustive-deps`: gesture configs carry worklet callbacks that are new
+    // objects on every render. Depending on them would rebuild the gesture each
+    // frame, which is exactly what RGH tells you not to do. Configs are read
+    // once, at mount, which is the documented contract of the exported hooks.
+    files: ['src/compat/gestures.ts'],
+    rules: {
+      'react-hooks/rules-of-hooks': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+    },
+  },
+  {
+    files: ['jest/**/*.js', '**/__tests__/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: {
+        jest: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+      },
+    },
+  },
+  {
+    ignores: ['node_modules/', 'lib/', 'coverage/', 'example/node_modules/'],
   },
 ]);
