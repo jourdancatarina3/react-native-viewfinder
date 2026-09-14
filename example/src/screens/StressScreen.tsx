@@ -27,7 +27,7 @@ export function StressScreen() {
 
       <View style={styles.bar}>
         <Text style={styles.readout} testID="stress-readout">
-          {index + 1} / {STRESS.length}
+          {`${index + 1} / ${STRESS.length}`}
         </Text>
         <Pressable
           style={styles.button}

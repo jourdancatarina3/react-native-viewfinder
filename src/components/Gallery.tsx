@@ -120,6 +120,7 @@ export const Gallery = forwardRef<GalleryRef, GalleryProps>(
       maxScale = MAX_SCALE,
       doubleTapScales = DOUBLE_TAP_SCALES,
       doubleTapToZoom = true,
+      doubleTapMaxDelay,
       pinchToZoom = true,
       panEnabled = true,
       testID,
@@ -142,6 +143,22 @@ export const Gallery = forwardRef<GalleryRef, GalleryProps>(
     const activeIndex = isControlled
       ? clamp(controlledIndex, 0, Math.max(0, count - 1))
       : uncontrolledIndex;
+
+    // Re-apply `initialIndex` each time the gallery is shown.
+    //
+    // The `useState` initialiser above only runs on the first mount, but a
+    // gallery driven by `visible` stays mounted between openings — so without
+    // this, opening from a grid would show whichever page you last looked at
+    // instead of the thumbnail you just tapped. Tracking the previous value
+    // rather than depending on `initialIndex` means changing that prop while
+    // the gallery is open does not yank the page out from under the user.
+    const wasVisible = useRef(visible);
+    useEffect(() => {
+      if (visible && !wasVisible.current && !isControlled) {
+        setUncontrolledIndex(clamp(initialIndex, 0, Math.max(0, count - 1)));
+      }
+      wasVisible.current = visible;
+    }, [visible, isControlled, initialIndex, count]);
 
     const [containerSize, setContainerSize] = useState<Size>(EMPTY_SIZE);
     const stride = containerSize.width + pageGap;
@@ -604,6 +621,9 @@ export const Gallery = forwardRef<GalleryRef, GalleryProps>(
                 doubleTapScales={doubleTapScales}
                 pinchToZoom={pinchToZoom}
                 doubleTapToZoom={doubleTapToZoom}
+                {...(doubleTapMaxDelay !== undefined
+                  ? { doubleTapMaxDelay }
+                  : null)}
                 panEnabled={panEnabled}
                 reduceMotion={reduceMotionValue}
                 {...(ImageComponent ? { ImageComponent } : null)}

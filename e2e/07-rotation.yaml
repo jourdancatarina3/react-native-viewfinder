@@ -1,0 +1,54 @@
+# Rotating mid-zoom must re-fit rather than stranding the image off-screen,
+# and must not lose the page or the zoom.
+appId: viewfinder.example
+name: Rotation while zoomed
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-grid'
+- tapOn:
+    id: 'thumb-0'
+- assertVisible: 'Close gallery, photo 1 of 6'
+
+- doubleTapOn:
+    id: 'grid-gallery'
+
+- setOrientation: LANDSCAPE_LEFT
+- assertVisible:
+    id: 'grid-gallery'
+- assertVisible: 'Close gallery, photo 1 of 6'
+
+# The image is still zoomed, so a horizontal drag pans it rather than changing
+# page — the same rule as in portrait. Confirm the gallery survives that.
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: LEFT
+- assertVisible: 'Close gallery, photo 1 of 6'
+
+# Zoom back out, and paging works in landscape.
+- doubleTapOn:
+    id: 'grid-gallery'
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: LEFT
+- assertVisible: 'Close gallery, photo 2 of 6'
+
+- setOrientation: PORTRAIT
+- assertVisible: 'Close gallery, photo 2 of 6'
+
+- tapOn:
+    id: 'gallery-close'
+- assertNotVisible:
+    id: 'grid-gallery'
+
+# Reopening at a different thumbnail must land on that photo, not the last one
+# viewed — the gallery stays mounted between openings.
+- tapOn:
+    id: 'thumb-4'
+- assertVisible: 'Close gallery, photo 5 of 6'

@@ -19,6 +19,9 @@ import { PHOTOS, thumbnailFor } from '../data/photos';
  * This is the "under five minutes" integration from the README, verbatim —
  * a piece of state, a grid, and three props on `<Gallery>`.
  */
+/** See SingleImageScreen for why the double-tap window is widened here. */
+const E2E_DOUBLE_TAP_DELAY = 700;
+
 export function GridScreen({ images = PHOTOS }: { images?: GalleryImage[] }) {
   const [index, setIndex] = useState<number | null>(null);
   const { width } = useWindowDimensions();
@@ -54,6 +57,7 @@ export function GridScreen({ images = PHOTOS }: { images?: GalleryImage[] }) {
         visible={index !== null}
         initialIndex={index ?? 0}
         onClose={() => setIndex(null)}
+        doubleTapMaxDelay={E2E_DOUBLE_TAP_DELAY}
         testID="grid-gallery"
         renderFooter={({ item, index: i, count, close }) => (
           <View style={styles.footer}>
@@ -64,11 +68,11 @@ export function GridScreen({ images = PHOTOS }: { images?: GalleryImage[] }) {
               onPress={close}
               testID="gallery-close"
               accessibilityRole="button"
-              accessibilityLabel="Close gallery"
+              accessibilityLabel={`Close gallery, photo ${i + 1} of ${count}`}
               style={styles.closeButton}
             >
               <Text style={styles.closeText}>
-                Close ({i + 1}/{count})
+                {`Close (${i + 1}/${count})`}
               </Text>
             </Pressable>
           </View>

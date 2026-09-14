@@ -172,6 +172,16 @@ export type ZoomBehaviourProps = {
    */
   doubleTapToZoom?: boolean;
   /**
+   * How long, in ms, a second tap may arrive after the first and still count as
+   * a double-tap. Defaults to Gesture Handler's own window (500ms).
+   *
+   * Raising it helps people who cannot tap quickly, and is needed by UI test
+   * runners whose synthetic taps are slower than a real finger. The cost is
+   * that when `onTap` is also supplied, the single tap has to wait this long to
+   * be sure no second tap is coming — so do not raise it far above 700.
+   */
+  doubleTapMaxDelay?: number;
+  /**
    * Whether pinching zooms.
    * @defaultValue true
    */

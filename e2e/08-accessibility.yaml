@@ -1,0 +1,36 @@
+# Reduced motion must not break any interaction, only remove the animation.
+appId: viewfinder.example
+name: Reduced motion
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-a11y'
+- assertVisible:
+    id: 'a11y-gallery'
+- assertVisible: '1 of 6'
+
+- tapOn:
+    id: 'reduce-motion-toggle'
+
+# Everything still works, just without the transitions.
+- swipe:
+    from:
+      id: 'a11y-gallery'
+    direction: LEFT
+- assertVisible: '2 of 6'
+- doubleTapOn:
+    id: 'a11y-gallery'
+- doubleTapOn:
+    id: 'a11y-gallery'
+- swipe:
+    from:
+      id: 'a11y-gallery'
+    direction: LEFT
+- assertVisible: '3 of 6'
+
+# Images expose their labels to screen readers.
+- assertVisible: 'A waterfall seen from above'

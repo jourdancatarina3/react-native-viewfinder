@@ -10,6 +10,7 @@ import type { Size, TranslationBounds } from './types';
  * animation.
  */
 export function isUsableSize(size: Size | null | undefined): size is Size {
+  'worklet';
   return (
     size != null &&
     Number.isFinite(size.width) &&

@@ -1,0 +1,6 @@
+# Maestro workspace config.
+#
+# The app id is the same on both platforms (set in example/app.json), so a
+# single suite drives iOS and Android without per-platform flows.
+flows:
+  - '*.yaml'

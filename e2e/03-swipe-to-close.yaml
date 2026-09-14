@@ -1,0 +1,55 @@
+# Dragging down dismisses; dragging down while zoomed must not.
+appId: viewfinder.example
+name: Swipe to close, and the zoomed-in exception
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-grid'
+- tapOn:
+    id: 'thumb-1'
+- assertVisible:
+    id: 'grid-gallery'
+
+# A downward drag from the fitted state dismisses.
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: DOWN
+- assertNotVisible:
+    id: 'grid-gallery'
+- assertVisible:
+    id: 'thumb-1'
+
+# Reopen, zoom in, then drag down. The image should pan, not dismiss.
+- tapOn:
+    id: 'thumb-1'
+- assertVisible:
+    id: 'grid-gallery'
+- doubleTapOn:
+    id: 'grid-gallery'
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: DOWN
+- assertVisible:
+    id: 'grid-gallery'
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: UP
+- assertVisible:
+    id: 'grid-gallery'
+
+# Once zoomed back out, dismissal works again.
+- doubleTapOn:
+    id: 'grid-gallery'
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: DOWN
+- assertNotVisible:
+    id: 'grid-gallery'

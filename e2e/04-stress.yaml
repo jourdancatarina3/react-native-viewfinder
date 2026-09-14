@@ -1,0 +1,68 @@
+# 120 images: jumping around a large list must stay instant, and the index
+# must stay consistent with what is on screen.
+appId: viewfinder.example
+name: Stress — 120 images, jumping and rapid swipes
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-stress'
+- assertVisible:
+    id: 'stress-readout'
+    text: '1 / 120'
+
+- tapOn:
+    id: 'jump-end'
+- assertVisible:
+    id: 'stress-readout'
+    text: '120 / 120'
+
+- tapOn:
+    id: 'jump-middle'
+- assertVisible:
+    id: 'stress-readout'
+    text: '61 / 120'
+
+- tapOn:
+    id: 'jump-start'
+- assertVisible:
+    id: 'stress-readout'
+    text: '1 / 120'
+
+# Rapid consecutive swipes must not skip pages or desynchronise the index.
+- repeat:
+    times: 5
+    commands:
+      - swipe:
+          from:
+            id: 'stress-gallery'
+          direction: LEFT
+- assertVisible:
+    id: 'stress-readout'
+    text: '6 / 120'
+
+- repeat:
+    times: 5
+    commands:
+      - swipe:
+          from:
+            id: 'stress-gallery'
+          direction: RIGHT
+- assertVisible:
+    id: 'stress-readout'
+    text: '1 / 120'
+
+# Swiping backwards past the first page must not move or crash.
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          from:
+            id: 'stress-gallery'
+          direction: RIGHT
+- assertVisible:
+    id: 'stress-readout'
+    text: '1 / 120'

@@ -3,6 +3,7 @@ import type { ReduceMotion } from 'react-native-reanimated';
 import {
   cancelAnimation,
   runOnJS,
+  runOnUI,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
@@ -51,6 +52,7 @@ export type UseZoomableOptions = {
   doubleTapScales: readonly number[];
   pinchToZoom: boolean;
   doubleTapToZoom: boolean;
+  doubleTapMaxDelay?: number;
   panEnabled: boolean;
 
   /** Turns every gesture off, e.g. for a gallery page that is not on screen. */
@@ -111,6 +113,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     doubleTapScales,
     pinchToZoom,
     doubleTapToZoom,
+    doubleTapMaxDelay,
     panEnabled,
     enabled = true,
     reduceMotion,
@@ -214,7 +217,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
       minScale,
       effectiveMaxScale
     );
-    scale.value = withTiming(clamped.scale, timing);
+    scale.value = withTiming(clamped.scale, timing, reportSettled);
     translateX.value = withTiming(clamped.translateX, timing);
     translateY.value = withTiming(clamped.translateY, timing);
     // Intentionally keyed on layout only: this must run when the container or
@@ -222,12 +225,37 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseSize, containerSize, minScale, effectiveMaxScale]);
 
-  // Report scale changes to JS, but only when they are perceptible — this fires
-  // on a settled value, not on every frame of a pinch.
+  /** The last value handed to `onZoomChange`, so repeats can be skipped. */
+  const lastReported = useSharedValue(minScale);
+
+  /**
+   * Reports the scale a movement came to rest at.
+   *
+   * Every animated scale change calls this from its completion callback, using
+   * the live value rather than the target so that an *interrupted* animation
+   * reports where it actually stopped.
+   *
+   * This exists because filtering the reaction below on "moved more than
+   * epsilon" is not enough on its own: the closing frames of an animation move
+   * by less than the epsilon, so the resting value would never be sent and
+   * consumers would hold a stale scale indefinitely — a reset button keyed on
+   * `scale > 1` would never switch off.
+   */
+  const reportSettled = useCallback(() => {
+    'worklet';
+    if (scale.value !== lastReported.value) {
+      lastReported.value = scale.value;
+      runOnJS(emitZoomChange)(scale.value);
+    }
+  }, [scale, lastReported, emitZoomChange]);
+
+  // Live updates during a gesture, throttled so a pinch does not cross to the
+  // JS thread on every frame. The resting value is handled by `reportSettled`.
   useAnimatedReaction(
     () => scale.value,
-    (current, previous) => {
-      if (previous !== null && Math.abs(current - previous) > 0.01) {
+    (current) => {
+      if (Math.abs(current - lastReported.value) > 0.01) {
+        lastReported.value = current;
         runOnJS(emitZoomChange)(current);
       }
     },
@@ -303,7 +331,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
         min,
         max
       );
-      scale.value = withSpring(settled.scale, spring);
+      scale.value = withSpring(settled.scale, spring, reportSettled);
       translateX.value = withSpring(settled.translateX, spring);
       translateY.value = withSpring(settled.translateY, spring);
     },
@@ -399,6 +427,9 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
     enabled: enabled && doubleTapToZoom,
     numberOfTaps: 2,
     maxDistance: 40,
+    ...(doubleTapMaxDelay !== undefined
+      ? { maxDelay: doubleTapMaxDelay }
+      : null),
     onEnd: (event: TapEvent) => {
       'worklet';
       const { min, max } = limits.value;
@@ -416,7 +447,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
         max
       );
 
-      scale.value = withTiming(next.scale, timing);
+      scale.value = withTiming(next.scale, timing, reportSettled);
       translateX.value = withTiming(next.translateX, timing);
       translateY.value = withTiming(next.translateY, timing);
 
@@ -456,7 +487,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
   const reset = useCallback(
     (animated = true) => {
       if (animated) {
-        scale.value = withTiming(minScale, timing);
+        scale.value = withTiming(minScale, timing, reportSettled);
         translateX.value = withTiming(0, timing);
         translateY.value = withTiming(0, timing);
       } else {
@@ -466,9 +497,10 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
         scale.value = minScale;
         translateX.value = 0;
         translateY.value = 0;
+        runOnUI(reportSettled)();
       }
     },
-    [scale, translateX, translateY, minScale, timing]
+    [scale, translateX, translateY, minScale, timing, reportSettled]
   );
 
   const zoomTo = useCallback(
@@ -493,13 +525,14 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
       );
 
       if (animated) {
-        scale.value = withTiming(next.scale, timing);
+        scale.value = withTiming(next.scale, timing, reportSettled);
         translateX.value = withTiming(next.translateX, timing);
         translateY.value = withTiming(next.translateY, timing);
       } else {
         scale.value = next.scale;
         translateX.value = next.translateX;
         translateY.value = next.translateY;
+        runOnUI(reportSettled)();
       }
     },
     [
@@ -511,6 +544,7 @@ export function useZoomable(options: UseZoomableOptions): UseZoomableResult {
       minScale,
       effectiveMaxScale,
       timing,
+      reportSettled,
     ]
   );
 

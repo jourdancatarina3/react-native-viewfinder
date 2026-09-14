@@ -24,7 +24,7 @@ export function UnreliableScreen() {
       renderError={({ index, retry }) => (
         <View style={styles.centre}>
           <Text style={styles.error} testID={`error-${index}`}>
-            Could not load photo {index + 1}
+            {`Could not load photo ${index + 1}`}
           </Text>
           <Pressable
             onPress={retry}

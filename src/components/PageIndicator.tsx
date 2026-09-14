@@ -23,13 +23,16 @@ function PageIndicatorComponent({ index, count, testID }: PageIndicatorProps) {
   return (
     <View style={styles.container} pointerEvents="none">
       <View style={styles.pill}>
+        {/* A single interpolated string, not `{index + 1} / {count}`: React
+            Native renders the latter as three separate text nodes, which reads
+            as three fragments to a screen reader and to UI test runners. */}
         <Text
           style={styles.text}
           accessibilityLabel={label}
           accessibilityRole="text"
           testID={testID}
         >
-          {index + 1} / {count}
+          {`${index + 1} / ${count}`}
         </Text>
       </View>
     </View>

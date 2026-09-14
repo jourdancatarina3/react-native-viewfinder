@@ -1,0 +1,56 @@
+# Opening a gallery from a grid, paging through it, and closing it.
+appId: viewfinder.example
+name: Grid to gallery — open, swipe, close
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-grid'
+- assertVisible:
+    id: 'thumb-0'
+
+- tapOn:
+    id: 'thumb-0'
+- assertVisible:
+    id: 'grid-gallery'
+- assertVisible: 'Close gallery, photo 1 of 6'
+
+# Forward.
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: LEFT
+- assertVisible: 'Close gallery, photo 2 of 6'
+
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: LEFT
+- assertVisible: 'Close gallery, photo 3 of 6'
+
+# Back.
+- swipe:
+    from:
+      id: 'grid-gallery'
+    direction: RIGHT
+- assertVisible: 'Close gallery, photo 2 of 6'
+
+# The footer button closes it.
+- tapOn:
+    id: 'gallery-close'
+- assertNotVisible:
+    id: 'grid-gallery'
+- assertVisible:
+    id: 'thumb-0'
+
+# Opening at a later index starts there rather than at zero.
+- tapOn:
+    id: 'thumb-3'
+- assertVisible: 'Close gallery, photo 4 of 6'
+- tapOn:
+    id: 'gallery-close'
+- assertNotVisible:
+    id: 'grid-gallery'

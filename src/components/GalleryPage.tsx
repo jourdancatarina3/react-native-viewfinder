@@ -24,6 +24,7 @@ export type GalleryPageProps = {
   doubleTapScales: readonly number[];
   pinchToZoom: boolean;
   doubleTapToZoom: boolean;
+  doubleTapMaxDelay?: number;
   panEnabled: boolean;
   reduceMotion: ReduceMotion;
 
@@ -72,6 +73,7 @@ function GalleryPageComponent({
   doubleTapScales,
   pinchToZoom,
   doubleTapToZoom,
+  doubleTapMaxDelay,
   panEnabled,
   reduceMotion,
   ImageComponent,
@@ -104,6 +106,7 @@ function GalleryPageComponent({
     doubleTapScales,
     pinchToZoom,
     doubleTapToZoom,
+    ...(doubleTapMaxDelay !== undefined ? { doubleTapMaxDelay } : null),
     panEnabled,
     enabled: isActive,
     reduceMotion,

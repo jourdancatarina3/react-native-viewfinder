@@ -54,6 +54,7 @@ export function AccessibilityScreen() {
         images={PHOTOS}
         presentation="inline"
         reduceMotion={reduceMotion}
+        doubleTapMaxDelay={700}
         testID="a11y-gallery"
       />
     </View>

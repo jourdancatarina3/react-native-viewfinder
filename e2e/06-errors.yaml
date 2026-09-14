@@ -1,0 +1,42 @@
+# Broken and slow images must surface the error slot and stay recoverable.
+appId: viewfinder.example
+name: Loading and error states
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-unreliable'
+- assertVisible:
+    id: 'unreliable-gallery'
+
+# First image is a control that should load.
+- assertVisible: '1 of 4'
+
+# Second is a host that does not resolve.
+- swipe:
+    from:
+      id: 'unreliable-gallery'
+    direction: LEFT
+- assertVisible: '2 of 4'
+- extendedWaitUntil:
+    visible:
+      id: 'error-1'
+    timeout: 20000
+
+# The retry button is reachable and does not crash.
+- tapOn:
+    id: 'retry-1'
+- extendedWaitUntil:
+    visible:
+      id: 'error-1'
+    timeout: 20000
+
+# A failed page must still be swipeable away from.
+- swipe:
+    from:
+      id: 'unreliable-gallery'
+    direction: LEFT
+- assertVisible: '3 of 4'

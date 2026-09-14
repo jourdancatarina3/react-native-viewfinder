@@ -1,0 +1,56 @@
+# Every aspect-ratio extreme must lay out and zoom without breaking.
+appId: viewfinder.example
+name: Aspect ratios — panorama, column, huge, single pixel
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-aspect'
+- assertVisible:
+    id: 'aspect-gallery'
+- assertVisible: '1 of 6'
+
+# Walk the whole set, zooming into each to prove the maths holds.
+- repeat:
+    times: 5
+    commands:
+      - doubleTapOn:
+          id: 'aspect-gallery'
+      - doubleTapOn:
+          id: 'aspect-gallery'
+      - swipe:
+          from:
+            id: 'aspect-gallery'
+          direction: LEFT
+
+- assertVisible: '6 of 6'
+
+# A zoomed panorama pans horizontally without dismissing.
+- swipe:
+    from:
+      id: 'aspect-gallery'
+    direction: RIGHT
+- swipe:
+    from:
+      id: 'aspect-gallery'
+    direction: RIGHT
+- swipe:
+    from:
+      id: 'aspect-gallery'
+    direction: RIGHT
+- swipe:
+    from:
+      id: 'aspect-gallery'
+    direction: RIGHT
+- assertVisible: '2 of 6'
+- doubleTapOn:
+    id: 'aspect-gallery'
+- swipe:
+    from:
+      id: 'aspect-gallery'
+    direction: LEFT
+- assertVisible:
+    id: 'aspect-gallery'

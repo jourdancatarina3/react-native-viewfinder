@@ -13,6 +13,7 @@ export function AspectRatiosScreen() {
     <Gallery
       images={ASPECT_RATIOS}
       presentation="inline"
+      doubleTapMaxDelay={700}
       testID="aspect-gallery"
     />
   );

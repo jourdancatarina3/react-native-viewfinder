@@ -152,6 +152,18 @@ function readSourceSize(event: unknown): Size | null {
 
 const styles = StyleSheet.create({
   container: {
+    // Fills the page on BOTH axes rather than shrink-wrapping the image.
+    //
+    // A broken image has no size, so a shrink-wrapped container collapses and
+    // the error and loading overlays inside it have no room to lay out —
+    // exactly when they matter most. `flex: 1` alone is not enough: the parent
+    // centres its children, so the cross axis would still be content-sized.
+    // `alignSelf: 'stretch'` is what gives this box a real width.
+    //
+    // The image is centred within it, which scales identically under the zoom
+    // transform because the transform origin is the centre either way.
+    flex: 1,
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
   },

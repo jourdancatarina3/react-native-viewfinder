@@ -10,9 +10,19 @@ import { PHOTOS } from '../data/photos';
  * The buttons exist to make the imperative handle testable from Maestro,
  * which cannot pinch reliably enough to assert on a scale.
  */
+/**
+ * Gesture Handler's default double-tap window is 500ms. Maestro's synthetic
+ * taps take longer than that to arrive, so the demo widens it — otherwise no
+ * E2E flow could exercise the real double-tap path at all. The library default
+ * is unchanged; see docs/DEVICE_TESTING.md.
+ */
+const E2E_DOUBLE_TAP_DELAY = 700;
+
 export function SingleImageScreen() {
   const ref = useRef<ZoomableImageRef>(null);
   const [scale, setScale] = useState(1);
+  const [taps, setTaps] = useState(0);
+  const [lastTarget, setLastTarget] = useState(0);
 
   const photo = PHOTOS[0]!;
 
@@ -24,7 +34,12 @@ export function SingleImageScreen() {
         width={photo.width}
         height={photo.height}
         accessibilityLabel={photo.accessibilityLabel}
+        doubleTapMaxDelay={E2E_DOUBLE_TAP_DELAY}
         onZoomChange={setScale}
+        onDoubleTap={(target) => {
+          setTaps((n) => n + 1);
+          setLastTarget(target);
+        }}
         testID="single-image"
         style={styles.image}
       />
@@ -32,6 +47,9 @@ export function SingleImageScreen() {
       <View style={styles.bar}>
         <Text style={styles.readout} testID="scale-readout">
           {scale.toFixed(2)}×
+        </Text>
+        <Text style={styles.readout} testID="dt-readout">
+          dt{taps}:{lastTarget.toFixed(1)}
         </Text>
 
         <Pressable

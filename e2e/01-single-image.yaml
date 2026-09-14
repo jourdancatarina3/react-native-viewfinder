@@ -1,0 +1,65 @@
+# Zoom, pan and reset on a single image, driven through the ref API where a
+# gesture would be too imprecise to assert on.
+appId: viewfinder.example
+name: Single image — zoom, double-tap, reset
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-single'
+- assertVisible:
+    id: 'single-image'
+
+# Starts fitted.
+- assertVisible:
+    id: 'scale-readout'
+    text: '1.00×'
+
+# Programmatic zoom, so the assertion is exact.
+- tapOn:
+    id: 'zoom-in'
+- assertNotVisible:
+    id: 'scale-readout'
+    text: '1.00×'
+
+- tapOn:
+    id: 'reset-zoom'
+- assertVisible:
+    id: 'scale-readout'
+    text: '1.00×'
+
+# A real double-tap gesture zooms to the configured stop. The readout shows
+# both that the gesture fired and what it targeted.
+- assertVisible:
+    id: 'dt-readout'
+    text: 'dt0:0.0'
+- doubleTapOn:
+    id: 'single-image'
+- assertVisible:
+    id: 'dt-readout'
+    text: 'dt1:2.5'
+- assertNotVisible:
+    id: 'scale-readout'
+    text: '1.00×'
+
+# Double-tapping again returns to fitted, the way the OS viewers behave.
+- doubleTapOn:
+    id: 'single-image'
+- assertVisible:
+    id: 'dt-readout'
+    text: 'dt2:1.0'
+- assertVisible:
+    id: 'scale-readout'
+    text: '1.00×'
+
+# Zooming anchored on a corner must not strand the image out of bounds.
+- tapOn:
+    id: 'zoom-corner'
+- tapOn:
+    id: 'reset-zoom'
+- assertVisible:
+    id: 'scale-readout'
+    text: '1.00×'

@@ -305,6 +305,80 @@ describe('Gallery', () => {
       expect(view.getByText('1 / 4')).toBeTruthy();
     });
 
+    it('re-applies initialIndex each time it is reopened', async () => {
+      // A gallery driven by `visible` stays mounted between openings, so the
+      // initial index has to be applied on every open, not just the first.
+      const view = await render(
+        <Gallery
+          images={PHOTOS}
+          visible={false}
+          initialIndex={0}
+          presentation="inline"
+          testID="g"
+        />
+      );
+
+      await view.rerender(
+        <Gallery
+          images={PHOTOS}
+          visible
+          initialIndex={1}
+          presentation="inline"
+          testID="g"
+        />
+      );
+      await layout(view);
+      expect(view.getByText('2 / 4')).toBeTruthy();
+
+      // Close, then reopen at a different index.
+      await view.rerender(
+        <Gallery
+          images={PHOTOS}
+          visible={false}
+          initialIndex={1}
+          presentation="inline"
+          testID="g"
+        />
+      );
+      await view.rerender(
+        <Gallery
+          images={PHOTOS}
+          visible
+          initialIndex={3}
+          presentation="inline"
+          testID="g"
+        />
+      );
+      await layout(view);
+      expect(view.getByText('4 / 4')).toBeTruthy();
+    });
+
+    it('does not move the page when initialIndex changes while open', async () => {
+      const view = await render(
+        <Gallery
+          images={PHOTOS}
+          visible
+          initialIndex={1}
+          presentation="inline"
+          testID="g"
+        />
+      );
+      await layout(view);
+      expect(view.getByText('2 / 4')).toBeTruthy();
+
+      await view.rerender(
+        <Gallery
+          images={PHOTOS}
+          visible
+          initialIndex={3}
+          presentation="inline"
+          testID="g"
+        />
+      );
+      // Still on the page the user was looking at.
+      expect(view.getByText('2 / 4')).toBeTruthy();
+    });
+
     it('follows a controlled index prop', async () => {
       const view = await render(
         <Gallery images={PHOTOS} index={1} presentation="inline" testID="g" />

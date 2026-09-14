@@ -3895,7 +3895,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*":
+"@types/node@npm:*, @types/node@npm:^26.5.1":
   version: 26.5.1
   resolution: "@types/node@npm:26.5.1"
   dependencies:
@@ -11103,6 +11103,7 @@ __metadata:
     "@release-it/conventional-changelog": "npm:^12.0.2"
     "@testing-library/react-native": "npm:^14.0.1"
     "@types/jest": "npm:^30.0.0"
+    "@types/node": "npm:^26.5.1"
     "@types/react": "npm:^19.2.0"
     babel-jest: "npm:^30.5.1"
     del-cli: "npm:^7.0.0"
