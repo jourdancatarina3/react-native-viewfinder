@@ -76,27 +76,27 @@ function CropToolbarComponent({
       <View style={styles.actions}>
         <ToolButton
           label="Rotate"
-          glyph="⟲"
+          glyph="⟲︎"
           onPress={onRotate}
           testID={testID ? `${testID}-rotate` : undefined}
         />
         <ToolButton
           label="Flip horizontally"
-          short="Flip ↔"
-          glyph="⇄"
+          short="Flip ↔︎"
+          glyph="⇄︎"
           onPress={onFlipHorizontal}
           testID={testID ? `${testID}-flip-h` : undefined}
         />
         <ToolButton
           label="Flip vertically"
-          short="Flip ↕"
-          glyph="⇅"
+          short="Flip ↕︎"
+          glyph="⇅︎"
           onPress={onFlipVertical}
           testID={testID ? `${testID}-flip-v` : undefined}
         />
         <ToolButton
           label="Reset"
-          glyph="↺"
+          glyph="↺︎"
           onPress={onReset}
           testID={testID ? `${testID}-reset` : undefined}
         />
@@ -195,6 +195,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 24,
   },
+  // Arrow glyphs default to colour-emoji presentation on iOS, which looks
+  // wrong next to the monochrome labels. U+FE0E on each glyph forces the text
+  // form; see the `short` and `glyph` strings above.
   pressed: {
     opacity: 0.55,
   },

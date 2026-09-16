@@ -305,8 +305,10 @@ Then clean up: `cd /tmp && rm -rf install-test` and delete the `.tgz`.
 
 ## Part 5 — Capture the demo media
 
-The README has a commented-out block where the GIFs go. A library with no visual is a much
-harder sell — this is worth the hour.
+The README already shows three **stills** (`docs/media/grid.png`, `gallery.png`,
+`crop.png`), captured from the example app on an iPhone 17 Pro simulator. They are real,
+so the README is not empty — but stills cannot show a pinch, and this library is mostly
+about how things move. Replacing them with GIFs is worth the hour.
 
 ### ☐ 5.1 Record *(30 min)*
 
@@ -348,12 +350,9 @@ at all beyond a point.
 
 ### ☐ 5.3 Put them in the README *(5 min)*
 
-```sh
-mkdir -p docs/media
-```
-
-Drop the GIFs in, then replace the `<!-- SCREENSHOTS: ... -->` block near the top of
-`README.md` with the table it contains.
+Drop the GIFs into `docs/media/` alongside the existing stills, then swap the `.png`
+filenames in the table at the top of `README.md` for the `.gif` ones. Keep the stills for
+anything you did not record.
 
 **Use absolute URLs**, not relative paths — npm does not resolve relative image paths, so
 your npm page would show broken images:

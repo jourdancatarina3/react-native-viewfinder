@@ -13,13 +13,13 @@ Each of those is complete as written. The gallery pinches to zoom, double-taps t
 a point, swipes between images and drags down to dismiss. The cropper gives you ratio
 presets, draggable handles, rotation and flips.
 
-<!-- SCREENSHOTS: replace this block with the GIFs described in PUBLISHING.md §8.
-     Suggested layout, once you have captured them:
+| Grid | Gallery | Crop |
+| :--: | :-----: | :--: |
+| <img src="https://raw.githubusercontent.com/jourdancatarina3/react-native-viewfinder/main/docs/media/grid.png" width="230" alt="A thumbnail grid of photos"> | <img src="https://raw.githubusercontent.com/jourdancatarina3/react-native-viewfinder/main/docs/media/gallery.png" width="230" alt="A photo open full-screen with a caption and close button"> | <img src="https://raw.githubusercontent.com/jourdancatarina3/react-native-viewfinder/main/docs/media/crop.png" width="230" alt="The crop screen with a 16:9 frame, ratio chips and tools"> |
 
-| Zoom | Gallery | Dismiss |
-| :--: | :-----: | :-----: |
-| <img src="docs/media/zoom.gif" width="240"> | <img src="docs/media/gallery.gif" width="240"> | <img src="docs/media/dismiss.gif" width="240"> |
--->
+<!-- These are stills captured from the example app on an iPhone 17 Pro.
+     Animated GIFs sell the gestures far better — PUBLISHING.md §5 has the
+     recording and conversion commands, and the layout to drop them into. -->
 
 ---
 
