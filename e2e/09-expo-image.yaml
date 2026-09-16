@@ -1,0 +1,40 @@
+# The pre-wired expo-image entry point must resolve and behave identically to
+# the default one. Proves the subpath export is wired correctly end to end.
+appId: viewfinder.example
+name: expo-image entry point
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-expo-image'
+- assertVisible:
+    id: 'expo-image-gallery'
+- assertVisible: '1 of 3'
+
+- swipe:
+    from:
+      id: 'expo-image-gallery'
+    direction: LEFT
+- assertVisible: '2 of 3'
+
+# Zoom behaves the same as with React Native's Image.
+- doubleTapOn:
+    id: 'expo-image-gallery'
+- swipe:
+    from:
+      id: 'expo-image-gallery'
+    direction: DOWN
+# Still open: a zoomed image cannot be dismissed by dragging.
+- assertVisible:
+    id: 'expo-image-gallery'
+
+- doubleTapOn:
+    id: 'expo-image-gallery'
+- swipe:
+    from:
+      id: 'expo-image-gallery'
+    direction: LEFT
+- assertVisible: '3 of 3'

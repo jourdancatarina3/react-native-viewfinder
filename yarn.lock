@@ -6665,6 +6665,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"expo-image-loader@npm:~57.0.1":
+  version: 57.0.1
+  resolution: "expo-image-loader@npm:57.0.1"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/c68a12901d789bfc395b045305a68a352e05d4b3e4fcbbe382591a5fff5fcd896e81c4cbb082dfaa520c5ac6ee2c3221c3887b0292b7b831e21779bd360936f0
+  languageName: node
+  linkType: hard
+
+"expo-image-manipulator@npm:~57.0.18":
+  version: 57.0.18
+  resolution: "expo-image-manipulator@npm:57.0.18"
+  dependencies:
+    expo-image-loader: "npm:~57.0.1"
+  peerDependencies:
+    expo: "*"
+  checksum: 10c0/eaf28aa007ae315a8d3ac6b9e82095999e380f1f795bf72d1d9a50b6e95d4cb24f2b39312a09ad422569b6f3b5d3e17d0fc021986851ca2ec0d510fe5397945e
+  languageName: node
+  linkType: hard
+
 "expo-image@npm:~57.0.5":
   version: 57.0.5
   resolution: "expo-image@npm:57.0.5"
@@ -11076,6 +11096,7 @@ __metadata:
     expo: "npm:~57.0.22"
     expo-haptics: "npm:~57.0.3"
     expo-image: "npm:~57.0.5"
+    expo-image-manipulator: "npm:~57.0.18"
     expo-status-bar: "npm:~57.0.1"
     react: "npm:19.2.3"
     react-dom: "npm:19.2.3"
@@ -11112,6 +11133,7 @@ __metadata:
     eslint-plugin-ft-flow: "npm:^3.0.11"
     eslint-plugin-prettier: "npm:^5.5.6"
     expo-image: "npm:~57.0.5"
+    expo-image-manipulator: "npm:~57.0.18"
     jest: "npm:^30.5.1"
     lefthook: "npm:^2.1.12"
     prettier: "npm:^3.9.6"

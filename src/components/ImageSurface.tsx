@@ -120,10 +120,13 @@ function ImageSurfaceComponent({
 /**
  * Pulls the natural size out of a load event.
  *
- * React Native reports `nativeEvent.source.{width,height}`; `expo-image`
- * reports `source.{width,height}` on a plain object. Both are handled so the
- * size is known even when the caller did not declare it and `Image.getSize`
- * has not resolved yet.
+ * `expo-image` reports `source.{width,height}` directly on the event; React
+ * Native's `Image` nests it under `nativeEvent`.
+ *
+ * The order matters. `expo-image` logs a deprecation warning the moment
+ * anything reads `.nativeEvent` off one of its events, so the flat shape is
+ * checked first and `nativeEvent` is only touched when there is nothing there —
+ * which is exactly the React Native case, where reading it is correct.
  */
 function readSourceSize(event: unknown): Size | null {
   if (!event || typeof event !== 'object') {
@@ -131,8 +134,8 @@ function readSourceSize(event: unknown): Size | null {
   }
 
   const candidate =
-    (event as { nativeEvent?: { source?: unknown } }).nativeEvent?.source ??
-    (event as { source?: unknown }).source;
+    (event as { source?: unknown }).source ??
+    (event as { nativeEvent?: { source?: unknown } }).nativeEvent?.source;
 
   if (!candidate || typeof candidate !== 'object') {
     return null;

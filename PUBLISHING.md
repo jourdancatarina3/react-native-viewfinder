@@ -129,7 +129,7 @@ verifies the publish came from your specific GitHub Actions workflow.
 
 ```sh
 gh repo create react-native-viewfinder --public \
-  --description "Pinch-to-zoom images and a full-screen gallery for React Native. No native code." \
+  --description "Zoom, browse and crop images in React Native. No native code." \
   --source . --remote origin
 ```
 
@@ -158,7 +158,7 @@ This is most of how people find libraries on GitHub:
 
 ```sh
 gh repo edit --add-topic react-native,expo,image-zoom,pinch-to-zoom,gallery,lightbox,\
-image-viewer,reanimated,gesture-handler,typescript
+image-viewer,image-crop,cropper,reanimated,gesture-handler,typescript
 ```
 
 ### ☐ 3.4 Protect `main` *(5 min, one-time)*
@@ -205,7 +205,7 @@ Confirm:
 - ☐ `lib/commonjs`, `lib/module` and `lib/typescript` are all present
 - ☐ `src/` is present (it is intentional — it makes source maps step into readable code)
 - ☐ **No** `__tests__`, no `example/`, no `e2e/`, no `.github/`
-- ☐ Packed size is roughly 110 KB. A sudden jump means something leaked into `files`
+- ☐ Packed size is roughly 185 KB. A sudden jump means something leaked into `files`
 
 ### ☐ 4.3 Run the example app on both platforms *(30 min)*
 
@@ -291,6 +291,11 @@ Check:
 
 - ☐ It bundles with no "unable to resolve" errors
 - ☐ Zoom, swipe and dismiss all work
+- ☐ **Bundles without `expo-image` and `expo-image-manipulator` installed** — this is the
+      whole point of them being optional subpath imports, and it is the easiest thing to
+      break. Only add them in a second pass.
+- ☐ With them installed, `react-native-viewfinder/expo-image` and
+      `react-native-viewfinder/expo-image-manipulator` both resolve
 - ☐ Autocomplete on `<Gallery ` shows the props with their JSDoc
 - ☐ `npx tsc --noEmit` passes
 
@@ -319,12 +324,14 @@ adb shell screenrecord --time-limit 15 /sdcard/zoom.mp4
 adb pull /sdcard/zoom.mp4
 ```
 
-Record four, 5–8 seconds each, from the example app:
+Record five, 5–8 seconds each, from the example app:
 
 1. **zoom** — Single image screen. Pinch in, pan around, double-tap out.
 2. **gallery** — Grid screen. Tap a thumbnail, swipe through three photos, close.
 3. **dismiss** — Grid screen. Open a photo, drag down, watch the backdrop fade.
-4. **aspect** *(optional)* — Aspect ratios screen, showing the panorama and the column.
+4. **crop** — Crop screen. Tap 1:1, drag a corner handle, rotate, then Crop. This one
+   probably sells the library hardest; make sure the thirds grid is visible while dragging.
+5. **aspect** *(optional)* — Aspect ratios screen, showing the panorama and the column.
 
 ### ☐ 5.2 Convert to GIF *(15 min)*
 

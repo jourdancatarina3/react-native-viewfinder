@@ -203,13 +203,38 @@ Reduced-motion is honored for every transition (complaint #8 is an open bug in a
 competitor), screen-reader labels per image, and correct safe-area/edge-to-edge behavior
 for Android 15+ (complaint #9).
 
-### Explicitly out of scope
+### D6. Cropping, with the interaction the phone editors use
 
-- **Video items.** Would require a peer on a video library and a second playback lifecycle;
-  it dilutes the "zero native linking" promise. `renderItem` lets users bring their own.
-- **Cropping.** zoom-toolkit's `CropZoom` covers it well; duplicating it adds surface area
-  without advantage.
+**Added after the initial plan** — see the scope note below.
+
+`<ImageCropper>` gives ratio presets, draggable handles, quarter-turn rotation and flips,
+a rule-of-thirds overlay that appears only while you are moving, and 44pt touch targets.
+It reports **geometry only**: a rectangle in the source image's own pixels, in the exact
+shape `expo-image-manipulator` and `@react-native-community/image-editor` already accept.
+That keeps the zero-native-dependency promise intact — the cropper itself processes no
+pixels — while `react-native-viewfinder/expo-image-manipulator` makes producing a file a
+single call for those who want it.
+
+### Scope: what changed, and what is still out
+
+The first version of this plan ruled cropping out, on the grounds that zoom-toolkit's
+`CropZoom` already covers it and duplicating it would add surface area without advantage.
+That was overruled: the brief for this library became "the important things you do with
+images", and cropping is squarely one of them. The judgement that it is *duplicated
+elsewhere* still stands; the judgement that it is therefore *not worth having here* did
+not survive contact with what users actually need from an image library.
+
+Still deliberately out:
+
+- **Filters and colour adjustment.** Real-time filters need a GPU pipeline — Skia or a
+  native module — which would end the "no native code" property that makes this installable
+  anywhere. A one-off adjustment is better served by `expo-image-manipulator` directly.
+- **Video items.** Would require a peer on a video library and a second playback lifecycle.
+  `renderItem` lets users bring their own.
+- **Image picking.** `expo-image-picker` and `react-native-image-crop-picker` own this, and
+  it is inseparable from platform permission flows.
 - **Skia / arbitrary-component zoom.** zoom-toolkit's genuine differentiator. Competing
   there would trade away the focus that makes D2 possible.
 - **Native code of any kind.** Per the brief, and it is what keeps the library installable
-  in any Expo project without a config plugin.
+  in any Expo project without a config plugin. The cropper holds this line by emitting
+  geometry rather than pixels.

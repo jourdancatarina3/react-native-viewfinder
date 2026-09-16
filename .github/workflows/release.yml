@@ -1,0 +1,64 @@
+name: Release
+
+# Publishing is triggered by hand, not by a push, so that cutting a release is
+# always a deliberate act. See PUBLISHING.md.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version bump'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      # Required for npm trusted publishing (OIDC). See PUBLISHING.md §2.4.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      # Nothing ships without the full suite passing first.
+      - name: Typecheck
+        run: yarn typecheck
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Test
+        run: yarn test
+
+      - name: Build
+        run: yarn build
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only needed when using an automation token instead of trusted
+          # publishing. Leave the secret unset if you set up OIDC.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: yarn release ${{ inputs.version }} --ci

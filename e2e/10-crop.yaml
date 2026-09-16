@@ -1,0 +1,119 @@
+# Cropping, end to end: ratio presets, rotate, flip, reset, and producing a
+# real output file through expo-image-manipulator.
+appId: viewfinder.example
+name: Crop, rotate, flip
+---
+- launchApp:
+    clearState: true
+# Flows run in one session, so a flow that rotates would otherwise leave the
+# device sideways for the next one.
+- setOrientation: PORTRAIT
+- tapOn:
+    id: 'demo-crop'
+- assertVisible:
+    id: 'cropper'
+- assertVisible:
+    id: 'cropper-overlay'
+- assertVisible:
+    id: 'cropper-toolbar'
+
+# The handles are present and reachable.
+- assertVisible:
+    id: 'cropper-overlay-handle-topLeft'
+- assertVisible:
+    id: 'cropper-overlay-handle-bottomRight'
+
+# A free crop of a 2000x1333 photo starts as the whole image.
+- assertVisible:
+    id: 'crop-readout'
+    text: '2000×1333'
+
+# Locking to 1:1 makes the reported region square.
+- tapOn:
+    id: 'cropper-toolbar-aspect-1:1'
+- assertVisible:
+    id: 'crop-readout'
+    text: '1333×1333'
+
+# 16:9 reshapes it again. The chip row scrolls, so the later presets have to
+# be brought into view before they can be tapped.
+- swipe:
+    from:
+      id: 'cropper-toolbar-aspects'
+    direction: LEFT
+- tapOn:
+    id: 'cropper-toolbar-aspect-16:9'
+- assertVisible:
+    id: 'crop-readout'
+    text: '2000×1125'
+
+# A quarter turn swaps which axis is constrained.
+- tapOn:
+    id: 'cropper-toolbar-rotate'
+- assertVisible:
+    id: 'crop-readout'
+    text: '1333×750'
+
+# Flips do not change the region's size.
+- tapOn:
+    id: 'cropper-toolbar-flip-h'
+- assertVisible:
+    id: 'crop-readout'
+    text: '1333×750'
+- tapOn:
+    id: 'cropper-toolbar-flip-v'
+- assertVisible:
+    id: 'crop-readout'
+    text: '1333×750'
+
+# Reset returns to the whole image.
+- tapOn:
+    id: 'cropper-toolbar-reset'
+- assertVisible:
+    id: 'crop-readout'
+    text: '2000×1333'
+
+# Dragging a corner handle shrinks the crop.
+- swipe:
+    from:
+      id: 'cropper-toolbar-aspects'
+    direction: RIGHT
+- tapOn:
+    id: 'cropper-toolbar-aspect-1:1'
+- assertVisible:
+    id: 'crop-readout'
+    text: '1333×1333'
+- swipe:
+    from:
+      id: 'cropper-overlay-handle-bottomRight'
+    direction: LEFT
+- assertNotVisible:
+    id: 'crop-readout'
+    text: '1333×1333'
+
+# Producing the file actually works, and reports the output dimensions.
+- tapOn:
+    id: 'cropper-toolbar-reset'
+- swipe:
+    from:
+      id: 'cropper-toolbar-aspects'
+    direction: RIGHT
+- tapOn:
+    id: 'cropper-toolbar-aspect-1:1'
+- tapOn:
+    id: 'crop-apply'
+- extendedWaitUntil:
+    visible:
+      id: 'crop-output'
+    timeout: 20000
+- assertVisible:
+    id: 'crop-output-size'
+    text: '1333×1333'
+- assertNotVisible:
+    id: 'crop-error'
+
+# And you can go back and crop again.
+- tapOn:
+    id: 'crop-again'
+- assertVisible:
+    id: 'cropper'

@@ -1,105 +1,97 @@
 # Contributing
 
-Contributions are always welcome, no matter how large or small!
+Thanks for taking a look. This is a small library with a deliberately narrow scope, so the
+most useful contributions are bug reports with a reproduction, and fixes with a test.
 
-We want this community to be friendly and respectful to each other. Please follow it in all your interactions with the project. Before contributing, please read the [code of conduct](./CODE_OF_CONDUCT.md).
-
-## Development workflow
-
-This project is a monorepo managed using [Yarn workspaces](https://yarnpkg.com/features/workspaces). It contains the following packages:
-
-- The library package in the root directory.
-- An example app in the `example/` directory.
-
-To get started with the project, make sure you have the correct version of [Node.js](https://nodejs.org/) installed. See the [`.nvmrc`](./.nvmrc) file for the version used in this project.
-
-Run `yarn` in the root directory to install the required dependencies for each package:
+## Getting set up
 
 ```sh
+git clone https://github.com/jourdancatarina3/react-native-viewfinder
+cd react-native-viewfinder
 yarn
 ```
 
-> Since the project relies on Yarn workspaces, you cannot use [`npm`](https://github.com/npm/cli) for development without manually migrating.
+> **macOS:** do not put the checkout in `~/Desktop` or `~/Documents` if you have iCloud
+> Drive's Desktop & Documents sync on. macOS stamps extended attributes on files there and
+> `codesign` rejects them, so the iOS build fails with *"resource fork, Finder information,
+> or similar detritus not allowed"*. Use `~/dev/` or run `xattr -cr node_modules`.
 
-The [example app](/example/) demonstrates usage of the library. You need to run it to test any changes you make.
-
-It is configured to use the local version of the library, so any changes you make to the library's source code will be reflected in the example app. Changes to the library's JavaScript code will be reflected in the example app without a rebuild, but native code changes will require a rebuild of the example app.
-
-You can use various commands from the root directory to work with the project.
-
-To start the packager:
+## The loop
 
 ```sh
-yarn example start
-```
-
-To run the example app on Android:
-
-```sh
-yarn example android
-```
-
-To run the example app on iOS:
-
-```sh
-yarn example ios
-```
-
-To confirm that the app is running with the new architecture, you can check the Metro logs for a message like this:
-
-```sh
-Running "ViewfinderExample" with {"fabric":true,"initialProps":{"concurrentRoot":true},"rootTag":1}
-```
-
-Note the `"fabric":true` and `"concurrentRoot":true` properties.
-
-To run the example app on Web:
-
-```sh
-yarn example web
-```
-
-Make sure your code passes TypeScript:
-
-```sh
+yarn test           # unit + integration, ~250 tests, about a second
+yarn test:watch
 yarn typecheck
-```
-
-To check for linting errors, run the following:
-
-```sh
 yarn lint
+yarn build          # ESM + CJS + type declarations
+
+yarn example ios
+yarn example android
+yarn e2e            # Maestro, against a running simulator/emulator
 ```
 
-To fix formatting errors, run the following:
+Lefthook runs lint, typecheck and the related tests on commit, and the full suite on push.
 
-```sh
-yarn lint --fix
+## How the code is arranged
+
+```
+src/
+  core/         Pure maths. No React, no React Native, no Reanimated imports.
+  compat/       The Gesture Handler 2/3 adapter.
+  hooks/        The zoom engine, wiring core/ to shared values and gestures.
+  components/   What consumers import.
 ```
 
+Two rules matter more than the rest:
 
+**1. Maths belongs in `src/core`.** Every function there is pure and synchronous, which is
+what makes it testable without a renderer or a UI thread. If you find yourself writing
+arithmetic inside a gesture callback, it probably wants to be a function in `core` with
+tests, called from the callback.
 
-### Scripts
+**2. Every exported function in `core/geometry.ts`, `core/zoom.ts` and `core/pan.ts` needs
+a `'worklet'` directive.** These run on the UI thread. Miss one and *nothing fails in
+Jest* — there is only one thread there — but on a device the worklet throws
+"Tried to synchronously call a Remote Function" and the gesture silently dies. This has
+happened once already. `src/core/__tests__/worklets.test.ts` guards it.
 
-The `package.json` file contains various scripts for common tasks:
+## Tests
 
-- `yarn`: setup project by installing dependencies.
-- `yarn typecheck`: type-check files with TypeScript.
-  - `yarn lint`: lint files with [ESLint](https://eslint.org/).
-    - `yarn example start`: start the Metro server for the example app.
-- `yarn example android`: run the example app on Android.
-- `yarn example ios`: run the example app on iOS.
-  - `yarn example web`: run the example app on Web.
-- `yarn example build:web`: build the example app for Web.
-  
-### Sending a pull request
+- **Maths** → a unit test in `src/core/__tests__`. Include the degenerate inputs: zero
+  sizes, extreme aspect ratios, `NaN`, negative deltas. That is where the bugs are.
+- **Component behaviour** → `src/__tests__`. Note that `render` is async in this version of
+  `@testing-library/react-native`, and the `screen` singleton resolves to a different
+  module instance than `render` does — use the object `render` returns.
+- **Interaction** → a Maestro flow in `e2e/`. Every flow sets `PORTRAIT` after launching,
+  because flows share one device session.
 
-> **Working on your first pull request?** You can learn how from this _free_ series: [How to Contribute to an Open Source Project on GitHub](https://app.egghead.io/playlists/how-to-contribute-to-an-open-source-project-on-github).
+Assert on accessibility labels rather than visible text where a component sets one — the
+page indicator exposes "1 of 6" while displaying "1 / 6", and the label is what a screen
+reader (and Maestro) reads.
 
-When you're sending a pull request:
+## Reporting a bug
 
-- Prefer small pull requests focused on one change.
-- Verify that linters and tests are passing.
-- Review the documentation to make sure it looks good.
-- Follow the pull request template when opening a pull request.
-- For pull requests that change the API or implementation, discuss with maintainers first by opening an issue.
+The five things that resolve most reports:
+
+1. React Native version
+2. `react-native-reanimated` version
+3. `react-native-gesture-handler` version
+4. Architecture — new or old
+5. The value of `HAS_HOOK_GESTURE_API`:
+   ```tsx
+   import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+   console.log(HAS_HOOK_GESTURE_API);
+   ```
+
+A reproduction in a fresh Expo app beats a description of the problem.
+
+## Scope
+
+Deliberately out of scope, with reasons in [docs/DECISIONS.md](docs/DECISIONS.md):
+cropping, zooming arbitrary non-image components, Skia, and native code of any kind.
+`react-native-zoom-toolkit` covers the first three well.
+
+## Commit messages
+
+[Conventional Commits](https://www.conventionalcommits.org/) — the changelog is generated
+from them. `fix:`, `feat:`, `docs:`, `test:`, `refactor:`, `chore:`.

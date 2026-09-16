@@ -8,6 +8,14 @@ import type {
 import type { Transform } from './core/types';
 
 export type { Size, Transform, Vector } from './core/types';
+export type {
+  AspectRatio,
+  CropHandle,
+  CropRect,
+  CropResult,
+  Rect,
+  Rotation,
+} from './core/crop';
 
 /**
  * Anything that can identify an image.
@@ -403,5 +411,134 @@ export type GalleryProps = ZoomBehaviourProps & {
   /** Style applied to the gallery container. */
   style?: StyleProp<ViewStyle>;
 
+  testID?: string;
+};
+
+// --- Cropping ---------------------------------------------------------------
+
+/** Context handed to a custom crop toolbar. */
+export type CropToolbarContext = {
+  aspectRatio: import('./core/crop').AspectRatio;
+  rotation: import('./core/crop').Rotation;
+  flipHorizontal: boolean;
+  flipVertical: boolean;
+  /** Adds a quarter turn clockwise. Pass `-1` for anticlockwise. */
+  rotate: (turns?: number) => void;
+  flip: (axis: 'horizontal' | 'vertical') => void;
+  setAspectRatio: (aspect: import('./core/crop').AspectRatio) => void;
+  /** Returns everything to the untouched state. */
+  reset: () => void;
+  /** Snapshot of what is currently framed. */
+  getResult: () => import('./core/crop').CropResult | null;
+};
+
+/** Imperative handle for {@link ImageCropperProps}. */
+export type ImageCropperRef = {
+  /**
+   * What the user has framed: a rectangle in the source image's own pixels,
+   * plus the rotation and flips to apply before it.
+   *
+   * Returns `null` until the image has been measured. The operations are
+   * order-dependent — rotate, then flip, then crop.
+   */
+  getResult: () => import('./core/crop').CropResult | null;
+  /** Adds a quarter turn clockwise. Pass `-1` for anticlockwise. */
+  rotate: (turns?: number) => void;
+  flip: (axis: 'horizontal' | 'vertical') => void;
+  setAspectRatio: (aspect: import('./core/crop').AspectRatio) => void;
+  reset: () => void;
+};
+
+export type ImageCropperProps = {
+  /** The image to crop. */
+  source: ImageSource;
+  /** Natural width, if known. Avoids a measurement round-trip. */
+  width?: number;
+  /** Natural height, if known. Avoids a measurement round-trip. */
+  height?: number;
+
+  /**
+   * Locked ratio as width ÷ height, `'free'` to let the frame be any shape, or
+   * `'original'` to match the source image.
+   * @defaultValue 'free'
+   */
+  aspectRatio?: import('./core/crop').AspectRatio;
+
+  /**
+   * Gap between the crop frame and the edge of the stage, in pixels. Leaves
+   * room for the handles to be grabbed.
+   * @defaultValue 20
+   */
+  framePadding?: number;
+
+  /**
+   * Largest zoom, relative to the frame-covering size.
+   * @defaultValue 6
+   */
+  maxScale?: number;
+
+  /**
+   * Smallest the frame can be dragged to, per axis, in pixels.
+   * @defaultValue 72
+   */
+  minFrameSize?: number;
+
+  /**
+   * Whether the frame can be resized by dragging its handles. Turn it off for
+   * a fixed-size crop where only the image should move.
+   * @defaultValue true
+   */
+  resizableFrame?: boolean;
+
+  /**
+   * Whether to show the built-in toolbar. Ignored when `renderToolbar` is set.
+   * @defaultValue true
+   */
+  showToolbar?: boolean;
+
+  /** Ratio chips to offer. Defaults to a standard photographic set. */
+  aspectPresets?: readonly {
+    label: string;
+    value: import('./core/crop').AspectRatio;
+  }[];
+
+  /**
+   * Colour of the dimmed area outside the frame.
+   * @defaultValue 'rgba(0, 0, 0, 0.6)'
+   */
+  scrimColor?: string;
+
+  /**
+   * Colour behind the image.
+   * @defaultValue '#000000'
+   */
+  backgroundColor?: string;
+
+  /** Component used to render the image. Defaults to React Native's `Image`. */
+  ImageComponent?: ImageRenderer;
+
+  /** Replaces the built-in toolbar entirely. */
+  renderToolbar?: (context: CropToolbarContext) => ReactNode;
+  /** Replaces the default spinner. */
+  renderLoading?: () => ReactNode;
+  /** Replaces the default error message. */
+  renderError?: (retry: () => void) => ReactNode;
+
+  /**
+   * Fires whenever the framed region changes — on gesture end, on a handle
+   * drag, and on rotate, flip or ratio change. Not on every frame.
+   */
+  onCropChange?: (result: import('./core/crop').CropResult) => void;
+
+  /** Read aloud by screen readers in place of the image. */
+  accessibilityLabel?: string;
+
+  /**
+   * Whether transitions respect the OS "reduce motion" setting.
+   * @defaultValue 'system'
+   */
+  reduceMotion?: ReduceMotionSetting;
+
+  style?: StyleProp<ViewStyle>;
   testID?: string;
 };

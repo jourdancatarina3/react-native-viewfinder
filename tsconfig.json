@@ -2,7 +2,11 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-viewfinder": ["./src/index"]
+      "react-native-viewfinder": ["./src/index"],
+      "react-native-viewfinder/expo-image": ["./src/expo-image"],
+      "react-native-viewfinder/expo-image-manipulator": [
+        "./src/expo-image-manipulator"
+      ]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,

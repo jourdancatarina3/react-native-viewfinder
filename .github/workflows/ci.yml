@@ -32,6 +32,68 @@ jobs:
         run: yarn typecheck
 
 
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Run unit and integration tests
+        run: yarn test:coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
+  # The library's headline claim is that it runs on Gesture Handler 2 *and* 3.
+  # A claim that is not exercised is a claim that will quietly stop being true,
+  # so the suite runs against both — including the compat layer's own branch
+  # selection, which differs between them.
+  compat-matrix:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gesture-handler: '2.32.0'
+            reanimated: '4.5.1'
+            worklets: '0.10.1'
+            label: 'RGH 2 + Reanimated 4 (the Expo SDK 57 default)'
+          - gesture-handler: '3.3.0'
+            reanimated: '4.6.0'
+            worklets: '0.12.2'
+            label: 'RGH 3 + Reanimated 4 (the npm latest default)'
+
+    name: compat (${{ matrix.label }})
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Install the peer versions under test
+        run: |
+          yarn add -D \
+            react-native-gesture-handler@${{ matrix.gesture-handler }} \
+            react-native-reanimated@${{ matrix.reanimated }} \
+            react-native-worklets@${{ matrix.worklets }}
+
+      - name: Typecheck against these peers
+        run: yarn typecheck
+
+      - name: Test against these peers
+        run: yarn test
+
   build-library:
     runs-on: ubuntu-latest
 

@@ -9,15 +9,58 @@ real hardware before publishing.
 
 | Check | Where | Result |
 | --- | --- | --- |
-| Unit + integration suite (239 tests) | Node / Jest | ✅ pass |
+| Unit + integration suite (339 tests) | Node / Jest | ✅ pass |
 | TypeScript strict typecheck | `tsc` | ✅ clean |
 | ESLint + Prettier | `eslint` | ✅ clean |
 | Library build (ESM + CJS + types) | `bob build` | ✅ clean, 111 KB packed |
 | Example app Metro bundle | `expo export --platform ios` | ✅ 1065 modules, no resolution errors |
-| Example app native build (iOS) | `expo run:ios` | see §2 |
-| Maestro E2E suite | iOS Simulator | see §2 |
+| Example app native build (iOS) | `expo run:ios`, iOS 26.5 | ✅ built, installed, ran |
+| Maestro E2E suite (10 flows) | iPhone 17 Pro simulator, iOS 26.5 | ✅ **10/10 passed** |
 | Android emulator | — | not run here; see §3 |
 | Physical devices | — | cannot be automated; see §5 |
+
+Logic-layer coverage (`src/core`) is **99.28% of statements, 99.32% of branches, 100% of
+functions**. Overall project coverage is 78.65%; the gap is almost entirely the worklet
+bodies in `useZoomable.ts`, which execute on Reanimated's UI thread and cannot run under
+Jest at all. Those are covered by the E2E suite instead.
+
+### What the E2E run covers
+
+| Flow | Covers |
+| --- | --- |
+| `01-single-image` | Ref API (`zoomTo`, `reset`), real double-tap in and out, anchored zoom |
+| `02-gallery-swipe` | Open from a grid, page forward and back, close, reopen at another index |
+| `03-swipe-to-close` | Drag-to-dismiss, **and that a zoomed image cannot be dismissed by dragging** |
+| `04-stress` | 120 images, jumping to first/middle/last, five rapid swipes, boundary clamping |
+| `05-aspect-ratios` | Zoom in and out of a panorama, a column, an 8000px image and a 1×1 pixel |
+| `06-errors` | Dead host, 404, slow response, error slot, retry, swiping off a failed page |
+| `07-rotation` | Rotating mid-zoom, paging in landscape, returning to portrait |
+| `08-accessibility` | Reduced motion on, every interaction still working, screen-reader labels |
+| `09-expo-image` | The `react-native-viewfinder/expo-image` subpath resolves and behaves identically |
+| `10-crop` | Ratio presets, rotate, flip, reset, handle drag, and producing a real output file |
+
+### Six bugs this found that the unit suite could not
+
+Worth reading before trusting any RN library's test count:
+
+1. **`isUsableSize` was missing its `'worklet'` directive.** Every worklet calling it threw
+   on the UI thread, so double-tap zoom silently did nothing. Jest has one thread, so all
+   243 tests passed. There is now a guard test that reads the source and fails if any
+   exported function in the UI-thread modules lacks the directive.
+2. **`onZoomChange` never reported the settled value**, leaving consumers with a stale
+   scale forever.
+3. **`initialIndex` was only read on first mount**, so reopening a gallery from a grid
+   showed the previously viewed page.
+4. **The loading and error overlays collapsed to zero width**, because `flex: 1` sets only
+   the main axis and the parent centres its children. They were unusable exactly when they
+   mattered.
+5. **Reading the load event tripped an `expo-image` deprecation warning** in every
+   consumer's console, because the handler checked `event.nativeEvent` before the flat
+   `event.source` that `expo-image` actually provides.
+6. **A free crop defaulted to the stage's shape rather than the image's**, so opening the
+   cropper on a landscape photo in a portrait app proposed discarding a third of it before
+   the user touched anything. Correct arithmetic, wrong product behaviour — the kind of
+   thing only looking at it catches.
 
 Re-run everything in the first group with:
 
@@ -38,9 +81,9 @@ yarn e2e                      # runs every flow in e2e/
 maestro test e2e/02-gallery-swipe.yaml   # or one at a time
 ```
 
-### A macOS gotcha worth knowing about
+### A macOS gotcha that cost real time here
 
-The first `expo run:ios` in this environment failed with:
+The first two `expo run:ios` attempts in this environment failed with:
 
 ```
 ExpoModulesJSI.framework: resource fork, Finder information, or similar detritus
@@ -57,9 +100,30 @@ Documents with iCloud Drive enabled. The fix:
 xattr -cr example/node_modules/expo-modules-jsi
 ```
 
-If it recurs, either move the checkout outside the synced folder or add that `xattr`
-command to your build script. Worth noting in your own README's troubleshooting section
-if you expect contributors on macOS.
+Clearing the attributes is **not enough on its own**: Expo's build script regenerates that
+framework on every run, and macOS immediately re-stamps it. The build only succeeded after
+the checkout was moved out of the synced folder entirely (to `/private/tmp`). If you keep
+your projects in `~/Desktop` or `~/Documents` with iCloud Drive sync on, move this one
+somewhere else — `~/dev/` — before building for iOS. It is in the README's troubleshooting
+section and in CONTRIBUTING.md for the same reason.
+
+### Maestro's `setOrientation` can silently stop working
+
+Twice in this environment, `setOrientation` reported `COMPLETED` while the simulator did
+not rotate at all — the screenshot stayed 1206×2622 and every subsequent assertion in that
+flow failed. It is not a modal problem: it happened on an inline screen too, and it
+happened after a `prebuild --clean` and reinstall.
+
+Rebooting the simulator fixes it:
+
+```sh
+xcrun simctl shutdown "iPhone 17 Pro"
+xcrun simctl boot "iPhone 17 Pro"
+```
+
+Worth knowing because the failure looks exactly like a rotation bug in the library. Check
+the screenshot's dimensions before believing one: if it is still portrait-shaped, the
+device never rotated and the test told you nothing.
 
 ## 3. Android
 
@@ -180,6 +244,23 @@ one Android phone** at minimum.
       every interaction still works.
 - [ ] Turn on the largest Dynamic Type / font scale. Check custom headers and footers still
       fit.
+
+### Cropping
+
+- [ ] Drag each of the eight handles. They should be easy to grab first time — if you find
+      yourself aiming, the touch targets are wrong.
+- [ ] With a locked ratio, drag a corner. The frame must keep its ratio and pivot about the
+      opposite corner, not slide.
+- [ ] Drag a handle until it hits the stage edge. It should stop cleanly, keeping its ratio.
+- [ ] Change the ratio while zoomed in. The image should scale back out just enough to
+      cover the new frame, never leaving a gap.
+- [ ] Rotate four times. You should arrive exactly where you started.
+- [ ] Rotate while zoomed and panned.
+- [ ] Flip horizontally and vertically, then crop. Check the saved file is actually mirrored
+      the way the preview showed.
+- [ ] Crop a very large photo (8000px+) and confirm the output dimensions match the readout.
+- [ ] Crop with no changes at all — the output should match the source dimensions.
+- [ ] Check the thirds grid fades in when you start moving and out when you stop.
 
 ### RTL
 

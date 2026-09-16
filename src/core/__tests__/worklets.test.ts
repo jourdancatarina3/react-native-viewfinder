@@ -18,7 +18,7 @@ import { join } from 'node:path';
  * stayed green. This test is the regression guard.
  */
 
-const UI_THREAD_MODULES = ['geometry.ts', 'zoom.ts', 'pan.ts'];
+const UI_THREAD_MODULES = ['geometry.ts', 'zoom.ts', 'pan.ts', 'crop.ts'];
 
 /**
  * `normalize.ts` is deliberately *not* in that list: it runs during render, on

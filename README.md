@@ -1,14 +1,17 @@
 # react-native-viewfinder
 
-**Pinch-to-zoom images and a full-screen gallery for React Native.** No native code, no
-config plugin, no version lock-in.
+**Zoom, browse and crop images in React Native.** No native code, no config plugin, no
+version lock-in.
 
 ```tsx
-<Gallery images={['https://…/1.jpg', 'https://…/2.jpg']} />
+<ZoomableImage source={uri} />                  // pinch, pan, double-tap
+<Gallery images={[uri1, uri2, uri3]} />         // swipeable full-screen gallery
+<ImageCropper source={uri} aspectRatio={1} />   // crop, rotate, flip
 ```
 
-That is a complete, working gallery: pinch to zoom, double-tap to zoom to a point, swipe
-between images, drag down to dismiss.
+Each of those is complete as written. The gallery pinches to zoom, double-taps to zoom to
+a point, swipes between images and drags down to dismiss. The cropper gives you ratio
+presets, draggable handles, rotation and flips.
 
 <!-- SCREENSHOTS: replace this block with the GIFs described in PUBLISHING.md §8.
      Suggested layout, once you have captured them:
@@ -31,10 +34,11 @@ Viewfinder runs on **Gesture Handler 2 and 3**, **Reanimated 3 and 4**, and ther
 **both architectures**, from a single install.
 
 **The maths is tested, not eyeballed.** Focal-point zoom, translation bounds, rubber-band
-resistance, page resolution and dismissal live in pure functions with no React or
-Reanimated imports, covered by 239 tests including the degenerate cases — zero-sized
-images, 12000×1000 panoramas, `NaN` deltas, twelve double-taps in a row. The recurring
-bugs in this category of library are all in that maths.
+resistance, page resolution, dismissal and the whole crop model live in pure functions with
+no React or Reanimated imports, covered by 339 tests including the degenerate cases —
+zero-sized images, 12000×1000 panoramas, `NaN` deltas, twelve double-taps in a row, crop
+rectangles pushed past an image's edge. The recurring bugs in this category of library are
+all in that maths.
 
 **Panning a zoomed-in image can never close the gallery.** Whether a drag belongs to the
 image or to the gallery is decided once, when the gesture starts, from the current scale.
@@ -42,7 +46,14 @@ It is never re-decided mid-drag.
 
 **Reduced motion is honoured everywhere**, not in three places out of five.
 
-**One required prop.** `images`. Everything else has a working default and an escape hatch.
+**Cropping that emits geometry, not pixels.** `<ImageCropper>` returns a rectangle in the
+source image's own coordinates, in exactly the shape `expo-image-manipulator` and
+`@react-native-community/image-editor` already accept — so the library itself still needs
+no native code, and you can crop server-side if you'd rather. One optional import turns it
+into a file in a single call.
+
+**One required prop.** `images`, or `source`. Everything else has a working default and an
+escape hatch.
 
 ---
 
@@ -92,6 +103,7 @@ export default function App() {
 | Architecture | New and old |
 | Expo | SDK 50+, including Expo Go |
 | `expo-image` | Optional. See [Using expo-image](#using-expo-image) |
+| `expo-image-manipulator` | Optional. Only for [turning a crop into a file](#turning-a-crop-into-a-file) |
 
 ---
 
@@ -140,6 +152,25 @@ A single zoomable image:
 import { ZoomableImage } from 'react-native-viewfinder';
 
 <ZoomableImage source="https://example.com/photo.jpg" />;
+```
+
+Cropping, with the result saved to a file:
+
+```tsx
+import { useRef } from 'react';
+import { ImageCropper } from 'react-native-viewfinder';
+import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
+import type { ImageCropperRef } from 'react-native-viewfinder';
+
+const cropper = useRef<ImageCropperRef>(null);
+
+<ImageCropper ref={cropper} source={uri} aspectRatio={1} />;
+
+// when the user confirms
+const result = cropper.current?.getResult();
+if (result) {
+  const { uri: croppedUri } = await applyCrop(uri, result);
+}
 ```
 
 ---
@@ -222,6 +253,62 @@ ref.current?.reset({ animated: true });
 ref.current?.zoomTo(3, { focal: { x: 100, y: 200 } });
 ref.current?.getTransform();  // => { scale, translateX, translateY }
 ```
+
+### `<ImageCropper>`
+
+Only `source` is required.
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `source` | `ImageSource` | — | A URI string, `require()` result, or `{ uri, width?, height? }`. |
+| `width` / `height` | `number` | — | Natural size, if known. Skips a measurement round-trip. |
+| `aspectRatio` | `number \| 'free' \| 'original'` | `'free'` | Locked ratio as width ÷ height. |
+| `framePadding` | `number` | `20` | Gap between the frame and the stage edge, leaving room to grab handles. |
+| `maxScale` | `number` | `6` | Largest zoom, relative to the frame-covering size. |
+| `minFrameSize` | `number` | `72` | Smallest the frame can be dragged to, per axis. |
+| `resizableFrame` | `boolean` | `true` | Whether the frame has draggable handles. |
+| `showToolbar` | `boolean` | `true` | Ignored when `renderToolbar` is set. |
+| `aspectPresets` | `{ label, value }[]` | standard set | Ratio chips to offer. |
+| `scrimColor` | `string` | `'rgba(0,0,0,0.6)'` | The dimmed area outside the frame. |
+| `backgroundColor` | `string` | `'#000000'` | Behind the image. |
+| `ImageComponent` | `ComponentType` | RN `Image` | e.g. `expo-image`'s `Image`. |
+| `renderToolbar` | `(ctx) => ReactNode` | — | Replaces the built-in toolbar entirely. |
+| `renderLoading` / `renderError` | function | defaults | As for `Gallery`. |
+| `onCropChange` | `(result: CropResult) => void` | — | Fires when the framed region changes — not every frame. |
+| `accessibilityLabel` | `string` | — | |
+| `reduceMotion` | `'system' \| 'always' \| 'never'` | `'system'` | |
+| `style` | `StyleProp<ViewStyle>` | — | |
+| `testID` | `string` | — | |
+
+**Ref** — `ImageCropperRef`:
+
+```tsx
+const ref = useRef<ImageCropperRef>(null);
+
+ref.current?.getResult();          // => CropResult | null
+ref.current?.rotate();             // a quarter turn clockwise; rotate(-1) for anticlockwise
+ref.current?.flip('horizontal');
+ref.current?.setAspectRatio(16 / 9);
+ref.current?.reset();
+```
+
+**`CropResult`** — everything needed to reproduce what the user framed:
+
+```tsx
+type CropResult = {
+  rotate: 0 | 90 | 180 | 270;
+  flipHorizontal: boolean;
+  flipVertical: boolean;
+  /** In the coordinates of the rotated image. */
+  crop: { originX: number; originY: number; width: number; height: number };
+  /** The source's natural size, before rotation. */
+  sourceSize: { width: number; height: number };
+};
+```
+
+The operations are **order-dependent — rotate, then flip, then crop** — because the
+rectangle is expressed in the coordinates of the already-rotated, already-flipped image.
+`applyCrop` handles that for you.
 
 ### Types
 
@@ -339,6 +426,70 @@ capped at 16×. Set `maxScale` explicitly to override.
 <Gallery images={photos} maxScale={3} doubleTapScales={[1.5, 3]} />
 ```
 
+### Turning a crop into a file
+
+The cropper deliberately does no image processing, so it adds no native dependency. To
+produce an actual file, use the optional helper:
+
+```sh
+npx expo install expo-image-manipulator
+```
+
+```tsx
+import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
+
+const result = cropperRef.current?.getResult();
+if (result) {
+  const { uri, width, height } = await applyCrop(sourceUri, result, {
+    compress: 0.9,
+    resize: { width: 1080 },
+  });
+}
+```
+
+Or apply the geometry yourself — with `@react-native-community/image-editor`, or by
+sending the rectangle to your backend and never uploading the full image at all:
+
+```tsx
+const { crop, rotate, flipHorizontal } = result;
+await fetch('/api/crop', {
+  method: 'POST',
+  body: JSON.stringify({ id: photoId, crop, rotate, flipHorizontal }),
+});
+```
+
+### A crop screen with your own controls
+
+`renderToolbar` replaces the built-in chrome while keeping every behaviour:
+
+```tsx
+<ImageCropper
+  source={uri}
+  showToolbar={false}
+  renderToolbar={({ rotate, setAspectRatio, reset, getResult }) => (
+    <MyBottomBar
+      onRotate={() => rotate()}
+      onSquare={() => setAspectRatio(1)}
+      onReset={reset}
+      onDone={() => save(getResult())}
+    />
+  )}
+/>
+```
+
+### A fixed-ratio avatar cropper
+
+Lock the ratio and turn off the handles, so only the image moves:
+
+```tsx
+<ImageCropper
+  source={uri}
+  aspectRatio={1}
+  resizableFrame={false}
+  showToolbar={false}
+/>
+```
+
 ### Using `expo-image`
 
 Two ways. Pass the component:
@@ -376,13 +527,16 @@ Factually, as of September 2026:
 | Gesture Handler 3 | ✅ | ✅ | n/a | ❓ | ❓ |
 | Reanimated 4 | ✅ | ✅ | n/a | ❌ open issue | ❓ |
 | Gallery | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Cropping | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Crop UI (ratios, handles, rotate) | ✅ | ❌ build your own | ❌ | ❌ | ❌ |
 | Zoom any component | ❌ | ✅ | ❌ | ✅ via `renderItem` | ✅ |
-| Cropping | ❌ | ✅ | ❌ | ❌ | ❌ |
 | Skia support | ❌ | ✅ | ❌ | ❌ | ❌ |
 
-**Use `react-native-zoom-toolkit` instead** if you need to zoom arbitrary components,
-Skia canvases, or want built-in cropping. It is well maintained and broader in scope;
-Viewfinder is deliberately narrower, and spends that focus on the image case being
+**Use `react-native-zoom-toolkit` instead** if you need to zoom arbitrary components or
+Skia canvases. It is well maintained and broader in scope. Its `CropZoom` is a crop
+*surface* — you supply the controls; Viewfinder's `<ImageCropper>` ships the whole screen
+(ratio chips, handles, rotate, flip, thirds grid) and you can still replace the toolbar.
+Viewfinder is deliberately narrower overall, and spends that focus on the image case being
 one line and on the version range being wide.
 
 **`react-native-image-viewing`** established the API shape everyone (including this
@@ -439,9 +593,11 @@ Stated plainly, in full in [docs/EDGE_CASES.md](docs/EDGE_CASES.md):
 1. Built-in chrome uses approximate safe-area insets; use `renderHeader` for exact ones.
 2. Swiping between pages requires the image to be at its fitted size (as in iOS Photos).
 3. No hero / shared-element transition yet.
-4. No built-in video item — use `renderItem`.
-5. Web is untested.
-6. Old-architecture support is by construction, not verified on hardware.
+4. The cropper returns geometry, not a file — one extra call produces the image.
+5. No filters or colour adjustment.
+6. No built-in video item — use `renderItem`.
+7. Web is untested.
+8. Old-architecture support is by construction, not verified on hardware.
 
 ## License
 

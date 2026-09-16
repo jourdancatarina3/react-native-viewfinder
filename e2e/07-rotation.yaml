@@ -12,6 +12,10 @@ name: Rotation while zoomed
     id: 'demo-grid'
 - tapOn:
     id: 'thumb-0'
+# Assert the container before its labels: the modal's accessibility tree is not
+# populated the instant the tap lands.
+- assertVisible:
+    id: 'grid-gallery'
 - assertVisible: 'Close gallery, photo 1 of 6'
 
 - doubleTapOn:
@@ -51,4 +55,6 @@ name: Rotation while zoomed
 # viewed — the gallery stays mounted between openings.
 - tapOn:
     id: 'thumb-4'
+- assertVisible:
+    id: 'grid-gallery'
 - assertVisible: 'Close gallery, photo 5 of 6'

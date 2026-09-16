@@ -4,3 +4,4 @@ export * from './pan';
 export * from './types';
 export * from './zoom';
 export * from './normalize';
+export * from './crop';

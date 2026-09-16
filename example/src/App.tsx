@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
 import { AccessibilityScreen } from './screens/AccessibilityScreen';
 import { AspectRatiosScreen } from './screens/AspectRatiosScreen';
+import { CropScreen } from './screens/CropScreen';
 import { ExpoImageScreen } from './screens/ExpoImageScreen';
 import { GridScreen } from './screens/GridScreen';
 import { MixedSourcesScreen } from './screens/MixedSourcesScreen';
@@ -39,6 +40,12 @@ const DEMOS: Demo[] = [
     title: 'Grid → gallery',
     blurb: 'The flow most apps want. Tap a thumbnail to open.',
     Screen: GridScreen,
+  },
+  {
+    id: 'crop',
+    title: 'Crop, rotate, flip',
+    blurb: 'Ratio presets, draggable handles, real output file.',
+    Screen: CropScreen,
   },
   {
     id: 'aspect',

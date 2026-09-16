@@ -39,11 +39,63 @@ body:
       placeholder: "x.x.x"
     validations:
       required: true
+  - type: input
+    id: gesture-handler-version
+    attributes:
+      label: react-native-gesture-handler version
+      description: |
+        This library supports both v2 and v3, and takes a different code path
+        for each — so which one you have is usually the first thing to check.
+      placeholder: "2.32.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: gesture-api
+    attributes:
+      label: Which gesture API is active?
+      description: |
+        Log this in your app and paste the result:
+        ```tsx
+        import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+        console.log(HAS_HOOK_GESTURE_API);
+        ```
+      options:
+        - "false — Gesture Handler v2 builder API"
+        - "true — Gesture Handler v3 hook API"
+        - "Not sure / the app does not start"
+    validations:
+      required: true
+  - type: input
+    id: reanimated-version
+    attributes:
+      label: react-native-reanimated version
+      placeholder: "4.5.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: React Native architecture
+      description: "`newArchEnabled` in app.json, or newArchEnabled in gradle.properties."
+      options:
+        - "New architecture (Fabric)"
+        - "Old architecture"
+        - "Not sure"
+    validations:
+      required: true
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Platforms affected
+      options:
+        - label: iOS
+        - label: Android
+        - label: Only on a physical device (not in the simulator/emulator)
   - type: textarea
     id: react-native-info
     attributes:
       label: Environment info
-      description: Run `react-native info` in your terminal and paste the results here.
+      description: Run `npx react-native info` in your terminal and paste the results here.
       render: shell
     validations:
       required: true

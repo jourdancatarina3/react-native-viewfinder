@@ -1,7 +1,7 @@
 {
   "name": "react-native-viewfinder",
   "version": "0.1.0",
-  "description": "Buttery-smooth pinch-to-zoom images and a full-screen gallery for React Native. Zero native code, works on Reanimated 3 & 4 and Gesture Handler 2 & 3.",
+  "description": "Zoom, browse and crop images in React Native. One line to start, no native code, works on Reanimated 3 & 4 and Gesture Handler 2 & 3.",
   "main": "./lib/commonjs/index.js",
   "types": "./lib/typescript/commonjs/src/index.d.ts",
   "exports": {
@@ -25,6 +25,17 @@
       "require": {
         "types": "./lib/typescript/commonjs/src/expo-image.d.ts",
         "default": "./lib/commonjs/expo-image.js"
+      }
+    },
+    "./expo-image-manipulator": {
+      "react-native-viewfinder-source": "./src/expo-image-manipulator.ts",
+      "import": {
+        "types": "./lib/typescript/module/src/expo-image-manipulator.d.ts",
+        "default": "./lib/module/expo-image-manipulator.js"
+      },
+      "require": {
+        "types": "./lib/typescript/commonjs/src/expo-image-manipulator.d.ts",
+        "default": "./lib/commonjs/expo-image-manipulator.js"
       }
     },
     "./package.json": "./package.json"
@@ -70,7 +81,13 @@
     "gesture-handler",
     "pan",
     "double-tap",
-    "new-architecture"
+    "new-architecture",
+    "crop",
+    "image-crop",
+    "cropper",
+    "image-editor",
+    "rotate",
+    "flip"
   ],
   "repository": {
     "type": "git",
@@ -104,6 +121,7 @@
     "eslint-plugin-ft-flow": "^3.0.11",
     "eslint-plugin-prettier": "^5.5.6",
     "expo-image": "~57.0.5",
+    "expo-image-manipulator": "~57.0.18",
     "jest": "^30.5.1",
     "lefthook": "^2.1.12",
     "prettier": "^3.9.6",
@@ -123,7 +141,8 @@
     "react": "*",
     "react-native": "*",
     "react-native-gesture-handler": ">=2.16.0 || >=3.0.0",
-    "react-native-reanimated": ">=3.10.0 || >=4.0.0"
+    "react-native-reanimated": ">=3.10.0 || >=4.0.0",
+    "expo-image-manipulator": "*"
   },
   "workspaces": [
     "example"
@@ -173,6 +192,29 @@
   "peerDependenciesMeta": {
     "expo-image": {
       "optional": true
+    },
+    "expo-image-manipulator": {
+      "optional": true
+    }
+  },
+  "release-it": {
+    "git": {
+      "commitMessage": "chore: release ${version}",
+      "tagName": "v${version}"
+    },
+    "npm": {
+      "publish": true
+    },
+    "github": {
+      "release": true
+    },
+    "plugins": {
+      "@release-it/conventional-changelog": {
+        "preset": {
+          "name": "conventionalcommits"
+        },
+        "infile": "CHANGELOG.md"
+      }
     }
   }
 }
