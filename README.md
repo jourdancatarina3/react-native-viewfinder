@@ -35,7 +35,7 @@ Viewfinder runs on **Gesture Handler 2 and 3**, **Reanimated 3 and 4**, and ther
 
 **The maths is tested, not eyeballed.** Focal-point zoom, translation bounds, rubber-band
 resistance, page resolution, dismissal and the whole crop model live in pure functions with
-no React or Reanimated imports, covered by 339 tests including the degenerate cases —
+no React or Reanimated imports, covered by 347 tests including the degenerate cases —
 zero-sized images, 12000×1000 panoramas, `NaN` deltas, twelve double-taps in a row, crop
 rectangles pushed past an image's edge. The recurring bugs in this category of library are
 all in that maths.

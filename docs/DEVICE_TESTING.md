@@ -9,7 +9,7 @@ real hardware before publishing.
 
 | Check | Where | Result |
 | --- | --- | --- |
-| Unit + integration suite (339 tests) | Node / Jest | ✅ pass |
+| Unit + integration suite (347 tests) | Node / Jest | ✅ pass |
 | TypeScript strict typecheck | `tsc` | ✅ clean |
 | ESLint + Prettier | `eslint` | ✅ clean |
 | Library build (ESM + CJS + types) | `bob build` | ✅ clean, 111 KB packed |
@@ -19,10 +19,11 @@ real hardware before publishing.
 | Android emulator | — | not run here; see §3 |
 | Physical devices | — | cannot be automated; see §5 |
 
-Logic-layer coverage (`src/core`) is **99.28% of statements, 99.32% of branches, 100% of
-functions**. Overall project coverage is 78.65%; the gap is almost entirely the worklet
-bodies in `useZoomable.ts`, which execute on Reanimated's UI thread and cannot run under
-Jest at all. Those are covered by the E2E suite instead.
+Logic-layer coverage (`src/core` — all the zoom, pan and crop maths) is **99.58% of
+statements, 98.38% of branches, 100% of functions**. Overall project coverage is 78.7%;
+the gap is almost entirely the worklet bodies in `useZoomable.ts` and `useCropper.ts`,
+which execute on Reanimated's UI thread and cannot run under Jest at all. Those are
+covered by the E2E suite instead.
 
 ### What the E2E run covers
 

@@ -92,7 +92,8 @@ Every function in `src/core` is pure, synchronous, and imports nothing from Reac
 Native or Reanimated. They carry `'worklet'` directives so they can be called from the UI
 thread, but that is just a Babel annotation — in Jest they are ordinary functions.
 
-This is what makes the correctness claim testable: 141 unit tests run against the real
+This is what makes the correctness claim testable: at the time this was written, 141 unit
+tests ran against the real
 implementation with no mocking, no renderer, and no UI thread. The alternative — maths
 inlined into gesture callbacks — is why competing libraries keep shipping focal-point
 regressions that only reproduce on a device.
@@ -220,7 +221,8 @@ handler, the pan bounds, the double-tap transform — threw
 *"Tried to synchronously call a Remote Function"* on the UI thread and died part-way
 through. Double-tap zoom simply did nothing, with no error surfaced to the user.
 
-**All 243 unit tests passed the whole time**, and they always would have: Jest has one
+**All 243 unit tests then in the suite passed the whole time**, and they always would
+have: Jest has one
 thread, so a plain function called from a "worklet" is just a function call. There is no
 behavioural assertion that can catch this, because in the test environment there is no
 misbehaviour. The only observable difference is a Babel directive in the source, so the
