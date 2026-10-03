@@ -393,17 +393,24 @@ export function cropRectFromTransform(
  * frame's centre at the new frame's centre requires:
  *
  *     scale′     = scale · k
- *     translate′ = −k · (frameCentre − translate)
+ *     translate′ = frameCentre′ − k · (frameCentre − translate)
  *
  * Substituting back shows the framed content point and the half-extents are
  * both unchanged, so `cropRectFromTransform` returns an identical rectangle
- * before and after.
+ * before and after. Both sides are linear in `k`, so animating the frame and
+ * the transform with the same curve keeps the crop fixed at every frame of the
+ * animation too, not just at its ends.
+ *
+ * `maxScale` caps the zoom. A crop smaller than the cap allows grows only as
+ * far as the cap, and stays centred — iOS does the same rather than zooming
+ * into a blur.
  */
 export function maximizeFrame(
   frame: Rect,
   transform: Transform,
   container: Size,
-  padding = 0
+  padding = 0,
+  maxScale = Infinity
 ): { frame: Rect; transform: Transform } {
   'worklet';
   if (
@@ -421,17 +428,344 @@ export function maximizeFrame(
     return { frame, transform };
   }
 
-  const k = target.width / frame.width;
+  let k = target.width / frame.width;
+  if (maxScale > 0 && transform.scale * k > maxScale) {
+    k = Math.max(1, maxScale / transform.scale);
+  }
+  const width = frame.width * k;
+  const height = frame.height * k;
+  const next: Rect = {
+    x: (container.width - width) / 2,
+    y: (container.height - height) / 2,
+    width,
+    height,
+  };
+
+  const centre = frameCentreOffset(frame, container);
+  const nextCentre = frameCentreOffset(next, container);
+
+  return {
+    frame: next,
+    transform: {
+      scale: transform.scale * k,
+      translateX: nextCentre.x - k * (centre.x - transform.translateX),
+      translateY: nextCentre.y - k * (centre.y - transform.translateY),
+    },
+  };
+}
+
+/**
+ * The transform that shows exactly `crop` inside `frame` — the inverse of
+ * {@link cropRectFromTransform}.
+ *
+ * Used whenever the geometry changes under a crop the user has already made:
+ * a quarter turn, a re-measured stage. The crop is the thing to preserve, so
+ * it is converted to a transform for the new geometry rather than the old
+ * transform being patched up.
+ *
+ * The scale is the larger of the two axes' requirements, so a frame whose
+ * ratio is a hair off the crop's still ends up covered.
+ */
+export function transformForCrop(
+  crop: CropRect,
+  displaySize: Size,
+  baseSize: Size,
+  frame: Rect,
+  container: Size
+): Transform {
+  'worklet';
+  if (
+    !isUsableSize(displaySize) ||
+    !isUsableSize(baseSize) ||
+    !isUsableSize(container) ||
+    crop.width <= 0 ||
+    crop.height <= 0 ||
+    frame.width <= 0 ||
+    frame.height <= 0
+  ) {
+    return { scale: 1, translateX: 0, translateY: 0 };
+  }
+
+  // Source pixels per base unit.
+  const k = displaySize.width / baseSize.width;
+  const scale = Math.max(
+    frame.width / (crop.width / k),
+    frame.height / (crop.height / k)
+  );
+  // The crop's centre, in base units from the image's own centre.
+  const contentX = (crop.originX + crop.width / 2 - displaySize.width / 2) / k;
+  const contentY =
+    (crop.originY + crop.height / 2 - displaySize.height / 2) / k;
   const centre = frameCentreOffset(frame, container);
 
   return {
-    frame: target,
-    transform: {
-      scale: transform.scale * k,
-      translateX: -k * (centre.x - transform.translateX),
-      translateY: -k * (centre.y - transform.translateY),
-    },
+    scale,
+    translateX: centre.x - scale * contentX,
+    translateY: centre.y - scale * contentY,
   };
+}
+
+/**
+ * Moves a crop rectangle along with its image through quarter turns,
+ * clockwise.
+ *
+ * A turn maps the point `(x, y)` of a `W × H` image to `(H − y, x)` of the
+ * `H × W` result, so a rectangle's top-left comes from its old bottom-left.
+ * This is what lets a rotation keep the crop the user made instead of
+ * starting over, as the Photos app does.
+ */
+export function rotateCropRect(
+  crop: CropRect,
+  displaySize: Size,
+  turns: number
+): CropRect {
+  'worklet';
+  const steps = (((Math.round(turns) % 4) + 4) % 4) as 0 | 1 | 2 | 3;
+  let rect = crop;
+  let size = displaySize;
+  for (let i = 0; i < steps; i++) {
+    rect = {
+      originX: size.height - rect.originY - rect.height,
+      originY: rect.originX,
+      width: rect.height,
+      height: rect.width,
+    };
+    size = { width: size.height, height: size.width };
+  }
+  return rect;
+}
+
+/**
+ * Moves the frame to a new shape while keeping the same subject in it.
+ *
+ * Used when a ratio is chosen. The content under the old frame's centre ends
+ * up under the new frame's centre at `preferredScale`, and the zoom is only
+ * raised past that if the new shape would otherwise run off the picture —
+ * which is how picking "Square" on a photo you have zoomed into keeps what you
+ * were looking at.
+ *
+ * `preferredScale` is the zoom the *user* chose. It defaults to the current
+ * zoom, but a caller that knows the current zoom was forced by the previous
+ * ratio passes the user's own instead, so stepping Square → 16:9 on an
+ * untouched photo shows the whole width again rather than staying zoomed.
+ */
+export function reframe(
+  frame: Rect,
+  transform: Transform,
+  nextFrame: Rect,
+  baseSize: Size,
+  container: Size,
+  maxScale: number,
+  preferredScale: number = transform.scale
+): Transform {
+  'worklet';
+  if (
+    !isUsableSize(baseSize) ||
+    !isUsableSize(container) ||
+    nextFrame.width <= 0 ||
+    nextFrame.height <= 0 ||
+    !Number.isFinite(transform.scale) ||
+    transform.scale <= 0
+  ) {
+    return transform;
+  }
+  const centre = frameCentreOffset(frame, container);
+  const nextCentre = frameCentreOffset(nextFrame, container);
+  const contentX = (centre.x - transform.translateX) / transform.scale;
+  const contentY = (centre.y - transform.translateY) / transform.scale;
+  const required = minScaleToCover(baseSize, nextFrame);
+  const preferred =
+    Number.isFinite(preferredScale) && preferredScale > 0
+      ? preferredScale
+      : transform.scale;
+  const scale = Math.max(preferred, required);
+  return clampToCover(
+    {
+      scale,
+      translateX: nextCentre.x - scale * contentX,
+      translateY: nextCentre.y - scale * contentY,
+    },
+    baseSize,
+    nextFrame,
+    container,
+    required,
+    Math.max(maxScale, required)
+  );
+}
+
+/**
+ * The frame and transform that show `crop` as large as the stage allows.
+ *
+ * The frame is the largest rectangle of the crop's shape the padded stage can
+ * hold — shrunk, still centred, if filling it would zoom past `maxScale`.
+ */
+export function fitCrop(
+  crop: CropRect,
+  displaySize: Size,
+  baseSize: Size,
+  container: Size,
+  padding: number,
+  maxScale: number
+): { frame: Rect; transform: Transform } {
+  'worklet';
+  let frame = frameForAspect(container, crop.width / crop.height, padding);
+  let transform = transformForCrop(
+    crop,
+    displaySize,
+    baseSize,
+    frame,
+    container
+  );
+  if (maxScale > 0 && transform.scale > maxScale) {
+    const k = maxScale / transform.scale;
+    const width = frame.width * k;
+    const height = frame.height * k;
+    frame = {
+      x: (container.width - width) / 2,
+      y: (container.height - height) / 2,
+      width,
+      height,
+    };
+    transform = transformForCrop(crop, displaySize, baseSize, frame, container);
+  }
+  return { frame, transform };
+}
+
+/**
+ * A similarity transform of the whole crop view — photo and frame together —
+ * about the stage's centre: `p ↦ (x, y) + scale · R(angle) · S(flipX, flipY) · p`.
+ *
+ * Turns and flips are animated with one of these rather than by moving the
+ * photo under a fixed frame. See {@link canvasMapping}.
+ */
+export type CanvasMapping = {
+  x: number;
+  y: number;
+  /** Degrees, clockwise. */
+  angle: number;
+  scale: number;
+  flipX: 1 | -1;
+  flipY: 1 | -1;
+};
+
+export const IDENTITY_MAPPING: CanvasMapping = {
+  x: 0,
+  y: 0,
+  angle: 0,
+  scale: 1,
+  flipX: 1,
+  flipY: 1,
+};
+
+/**
+ * The transform that makes a new crop scene look exactly like an old one,
+ * when the new one is the old one turned by `angle` and/or mirrored.
+ *
+ * A quarter turn or a flip keeps the crop — the same part of the picture is
+ * framed before and after, only turned. So rather than animating the photo
+ * under a frame that stays upright, which opens gaps in the corners mid-turn,
+ * the new scene is put in place at once and the whole view starts out
+ * transformed by this mapping, so nothing appears to change. Animating the
+ * mapping back to identity then turns the photo and its frame together, as
+ * one piece, the way the Photos app does.
+ *
+ * `angle` and the flips describe how the *old* scene is obtained from the new
+ * one about their frames' centres; the scale and offset are derived so the
+ * new frame lands exactly on the old.
+ */
+export function canvasMapping(
+  oldFrame: Rect,
+  newFrame: Rect,
+  container: Size,
+  angle: number,
+  flipX: 1 | -1 = 1,
+  flipY: 1 | -1 = 1
+): CanvasMapping {
+  'worklet';
+  if (newFrame.width <= 0 || newFrame.height <= 0) {
+    return IDENTITY_MAPPING;
+  }
+  const quarter = Math.round(angle / 90);
+  const sideways = Math.abs(quarter) % 2 === 1;
+  const scale = oldFrame.width / (sideways ? newFrame.height : newFrame.width);
+  const oldCentre = frameCentreOffset(oldFrame, container);
+  const newCentre = frameCentreOffset(newFrame, container);
+  // Offset that carries the new frame's centre onto the old one's.
+  const theta = (angle * Math.PI) / 180;
+  const sx = flipX * newCentre.x;
+  const sy = flipY * newCentre.y;
+  const rx = Math.cos(theta) * sx - Math.sin(theta) * sy;
+  const ry = Math.sin(theta) * sx + Math.cos(theta) * sy;
+  return {
+    x: oldCentre.x - scale * rx,
+    y: oldCentre.y - scale * ry,
+    angle,
+    scale,
+    flipX,
+    flipY,
+  };
+}
+
+/**
+ * Applies `next` after `current`: the mapping a view already part-way through
+ * one animation needs so a second command starts from what is on screen.
+ */
+export function composeMappings(
+  current: CanvasMapping,
+  next: CanvasMapping
+): CanvasMapping {
+  'worklet';
+  const theta = (current.angle * Math.PI) / 180;
+  const sx = current.flipX * next.x;
+  const sy = current.flipY * next.y;
+  return {
+    x:
+      current.x + current.scale * (Math.cos(theta) * sx - Math.sin(theta) * sy),
+    y:
+      current.y + current.scale * (Math.sin(theta) * sx + Math.cos(theta) * sy),
+    // A reflection reverses the sense of any rotation that follows it.
+    angle: current.angle + current.flipX * current.flipY * next.angle,
+    scale: current.scale * next.scale,
+    flipX: (current.flipX * next.flipX) as 1 | -1,
+    flipY: (current.flipY * next.flipY) as 1 | -1,
+  };
+}
+
+/** Where a point lands under a mapping. */
+export function applyMapping(mapping: CanvasMapping, point: Vector): Vector {
+  'worklet';
+  const theta = (mapping.angle * Math.PI) / 180;
+  const sx = mapping.flipX * point.x;
+  const sy = mapping.flipY * point.y;
+  return {
+    x:
+      mapping.x + mapping.scale * (Math.cos(theta) * sx - Math.sin(theta) * sy),
+    y:
+      mapping.y + mapping.scale * (Math.sin(theta) * sx + Math.cos(theta) * sy),
+  };
+}
+
+/** Mirrors a crop rectangle within its image, left-to-right or top-to-bottom. */
+export function mirrorCropRect(
+  crop: CropRect,
+  displaySize: Size,
+  axis: 'horizontal' | 'vertical'
+): CropRect {
+  'worklet';
+  return axis === 'horizontal'
+    ? { ...crop, originX: displaySize.width - crop.originX - crop.width }
+    : { ...crop, originY: displaySize.height - crop.originY - crop.height };
+}
+
+/** Whether two rectangles are the same to within a fraction of a point. */
+export function sameRect(a: Rect, b: Rect, tolerance = 0.5): boolean {
+  'worklet';
+  return (
+    Math.abs(a.x - b.x) <= tolerance &&
+    Math.abs(a.y - b.y) <= tolerance &&
+    Math.abs(a.width - b.width) <= tolerance &&
+    Math.abs(a.height - b.height) <= tolerance
+  );
 }
 
 /**

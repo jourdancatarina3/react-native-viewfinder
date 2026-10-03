@@ -258,13 +258,20 @@ ref.current?.getTransform();  // => { scale, translateX, translateY }
 
 Only `source` is required.
 
+It behaves like the Photos app. Drag a handle and the photo holds still under it; let go,
+and after a short pause the frame grows back to fill the screen while the photo zooms to
+keep exactly what you framed. Grab another handle during the pause and nothing moves in
+between. Pinch and pan move the photo under the frame and spring back if they would leave
+a gap. A quarter turn or a flip keeps your crop and turns or mirrors it with the picture,
+the photo and its frame moving as one piece.
+
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `source` | `ImageSource` | — | A URI string, `require()` result, or `{ uri, width?, height? }`. |
 | `width` / `height` | `number` | — | Natural size, if known. Skips a measurement round-trip. |
 | `aspectRatio` | `number \| 'free' \| 'original'` | `'free'` | Locked ratio as width ÷ height. |
 | `framePadding` | `number` | `20` | Gap between the frame and the stage edge, leaving room to grab handles. |
-| `maxScale` | `number` | `6` | Largest zoom, relative to the frame-covering size. |
+| `maxScale` | `number` | `6` | Largest zoom, relative to the photo fitted to the stage. Also caps how far the frame re-centres into a very small crop. |
 | `minFrameSize` | `number` | `72` | Smallest the frame can be dragged to, per axis. |
 | `resizableFrame` | `boolean` | `true` | Whether the frame has draggable handles. |
 | `showToolbar` | `boolean` | `true` | Ignored when `renderToolbar` is set. |

@@ -472,7 +472,9 @@ export type ImageCropperProps = {
   framePadding?: number;
 
   /**
-   * Largest zoom, relative to the frame-covering size.
+   * Largest zoom, relative to the photo fitted to the stage. Also caps how far
+   * the frame re-centres into a very small crop: it grows only as far as this
+   * zoom allows rather than magnifying into a blur.
    * @defaultValue 6
    */
   maxScale?: number;

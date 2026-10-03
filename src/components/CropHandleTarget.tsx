@@ -1,17 +1,17 @@
 import { memo, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { runOnJS } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import type { PanEvent } from '../compat/gestures';
 import { GestureDetector, usePan } from '../compat/gestures';
-import type { CropHandle, Rect } from '../core/crop';
-import { useStableCallback } from '../hooks/useStableCallback';
+import type { CropHandle } from '../core/crop';
+import type { FrameValues } from '../hooks/useCropper';
 
 export type CropHandleTargetProps = {
   handle: CropHandle;
-  frame: Rect;
+  frame: FrameValues;
+  /** Worklets, called on the UI thread from inside the gesture. */
   onStart: () => void;
-  onMove: (handle: CropHandle, delta: { x: number; y: number }) => void;
+  onMove: (handle: CropHandle, dx: number, dy: number) => void;
   onEnd: () => void;
   testID?: string;
 };
@@ -27,6 +27,10 @@ export type CropHandleTargetProps = {
  * Corner handles are L-shaped brackets sitting just inside the frame; edge
  * handles are short bars centred on each side. That is the arrangement both
  * phone photo editors use, so it needs no explanation.
+ *
+ * The drag runs entirely on the UI thread: the gesture calls the cropper's
+ * worklets directly, and the target follows the frame through an animated
+ * transform. Nothing crosses to JS until the finger lifts.
  */
 function CropHandleTargetComponent({
   handle,
@@ -36,40 +40,40 @@ function CropHandleTargetComponent({
   onEnd,
   testID,
 }: CropHandleTargetProps) {
-  // Gesture callbacks are captured when the gesture is built and never again,
-  // so the handlers must not change identity. Without this the handle keeps
-  // calling the very first `onStart`/`onMove` it ever saw — which close over
-  // the frame as it was at mount, a zero-sized rectangle — and dragging a
-  // handle does nothing at all.
-  const emitStart = useStableCallback(onStart);
-  const emitMove = useStableCallback(onMove);
-  const emitEnd = useStableCallback(onEnd);
-
+  // Read once when the gesture is built, so these must be worklets that read
+  // only shared values — which the cropper's are.
   const gesture = usePan({
-    // Handles must win over the image pan underneath them, which they do by
-    // being later in the tree; no explicit relation is needed.
     onStart: () => {
       'worklet';
-      runOnJS(emitStart)();
+      onStart();
     },
     onUpdate: (event: PanEvent) => {
       'worklet';
-      runOnJS(emitMove)(handle, {
-        x: event.translationX,
-        y: event.translationY,
-      });
+      onMove(handle, event.translationX, event.translationY);
     },
     onEnd: () => {
       'worklet';
-      runOnJS(emitEnd)();
+      onEnd();
     },
   });
 
-  const { position, marker } = useMemo(
-    () => layoutFor(handle, frame),
-    [handle, frame]
-  );
+  const position = useAnimatedStyle(() => {
+    const point = anchorFor(
+      handle,
+      frame.x.value,
+      frame.y.value,
+      frame.width.value,
+      frame.height.value
+    );
+    return {
+      transform: [
+        { translateX: point.x - TARGET / 2 },
+        { translateY: point.y - TARGET / 2 },
+      ],
+    };
+  });
 
+  const marker = useMemo(() => markerFor(handle), [handle]);
   const isCorner = handle.length > 6; // 'topLeft', 'bottomRight', …
 
   return (
@@ -94,77 +98,100 @@ const BRACKET = 22;
 const THICKNESS = 3;
 const EDGE_LENGTH = 32;
 
-/** Where the touch target sits, and how its marker is drawn inside it. */
-function layoutFor(handle: CropHandle, frame: Rect) {
-  const left = frame.x;
-  const top = frame.y;
-  const right = frame.x + frame.width;
-  const bottom = frame.y + frame.height;
-  const centreX = frame.x + frame.width / 2;
-  const centreY = frame.y + frame.height / 2;
-  const half = TARGET / 2;
+/** The point on the frame a handle sits on. */
+function anchorFor(
+  handle: CropHandle,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): { x: number; y: number } {
+  'worklet';
+  const right = x + width;
+  const bottom = y + height;
+  const centreX = x + width / 2;
+  const centreY = y + height / 2;
+  switch (handle) {
+    case 'topLeft':
+      return { x, y };
+    case 'topRight':
+      return { x: right, y };
+    case 'bottomLeft':
+      return { x, y: bottom };
+    case 'bottomRight':
+      return { x: right, y: bottom };
+    case 'top':
+      return { x: centreX, y };
+    case 'bottom':
+      return { x: centreX, y: bottom };
+    case 'left':
+      return { x, y: centreY };
+    case 'right':
+    default:
+      return { x: right, y: centreY };
+  }
+}
 
+/** How a handle's marker is drawn inside its centred touch target. */
+function markerFor(handle: CropHandle) {
+  const half = TARGET / 2;
   switch (handle) {
     case 'topLeft':
       return {
-        position: { left: left - half, top: top - half },
-        marker: {
-          borderTopWidth: THICKNESS,
-          borderLeftWidth: THICKNESS,
-          top: half,
-          left: half,
-        },
+        borderTopWidth: THICKNESS,
+        borderLeftWidth: THICKNESS,
+        top: half,
+        left: half,
       };
     case 'topRight':
       return {
-        position: { left: right - half, top: top - half },
-        marker: {
-          borderTopWidth: THICKNESS,
-          borderRightWidth: THICKNESS,
-          top: half,
-          right: half,
-        },
+        borderTopWidth: THICKNESS,
+        borderRightWidth: THICKNESS,
+        top: half,
+        right: half,
       };
     case 'bottomLeft':
       return {
-        position: { left: left - half, top: bottom - half },
-        marker: {
-          borderBottomWidth: THICKNESS,
-          borderLeftWidth: THICKNESS,
-          bottom: half,
-          left: half,
-        },
+        borderBottomWidth: THICKNESS,
+        borderLeftWidth: THICKNESS,
+        bottom: half,
+        left: half,
       };
     case 'bottomRight':
       return {
-        position: { left: right - half, top: bottom - half },
-        marker: {
-          borderBottomWidth: THICKNESS,
-          borderRightWidth: THICKNESS,
-          bottom: half,
-          right: half,
-        },
+        borderBottomWidth: THICKNESS,
+        borderRightWidth: THICKNESS,
+        bottom: half,
+        right: half,
       };
     case 'top':
       return {
-        position: { left: centreX - half, top: top - half },
-        marker: { width: EDGE_LENGTH, height: THICKNESS, top: half },
+        width: EDGE_LENGTH,
+        height: THICKNESS,
+        top: half,
+        left: half - EDGE_LENGTH / 2,
       };
     case 'bottom':
       return {
-        position: { left: centreX - half, top: bottom - half },
-        marker: { width: EDGE_LENGTH, height: THICKNESS, bottom: half },
+        width: EDGE_LENGTH,
+        height: THICKNESS,
+        bottom: half,
+        left: half - EDGE_LENGTH / 2,
       };
     case 'left':
       return {
-        position: { left: left - half, top: centreY - half },
-        marker: { width: THICKNESS, height: EDGE_LENGTH, left: half },
+        width: THICKNESS,
+        height: EDGE_LENGTH,
+        left: half,
+        top: half - EDGE_LENGTH / 2,
       };
     case 'right':
     default:
       return {
-        position: { left: right - half, top: centreY - half },
-        marker: { width: THICKNESS, height: EDGE_LENGTH, right: half },
+        width: THICKNESS,
+        height: EDGE_LENGTH,
+        right: half,
+        top: half - EDGE_LENGTH / 2,
       };
   }
 }
@@ -194,6 +221,8 @@ function labelFor(handle: CropHandle): string {
 const styles = StyleSheet.create({
   target: {
     position: 'absolute',
+    left: 0,
+    top: 0,
     width: TARGET,
     height: TARGET,
   },

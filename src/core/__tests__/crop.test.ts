@@ -1,22 +1,32 @@
 import {
+  applyMapping,
   ASPECT_PRESETS,
+  canvasMapping,
   clampToCover,
+  composeMappings,
   cropImageSize,
   cropRectFromTransform,
   cropTranslationBounds,
+  fitCrop,
   frameCentreOffset,
   frameForAspect,
+  IDENTITY_MAPPING,
   imageRect,
   intersectRects,
   isFullFrame,
   maximizeFrame,
   minScaleToCover,
+  mirrorCropRect,
   nextRotation,
+  reframe,
   resizeFrame,
   resolveAspectRatio,
+  rotateCropRect,
   rotatedSize,
+  sameRect,
+  transformForCrop,
 } from '../crop';
-import type { Rect } from '../crop';
+import type { CropRect, Rect } from '../crop';
 import type { Size, Transform } from '../types';
 
 const STAGE: Size = { width: 400, height: 700 };
@@ -984,5 +994,364 @@ describe('the whole flow', () => {
         expect(rect.width / rect.height).toBeCloseTo(ratio, 0);
       }
     }
+  });
+});
+
+describe('maximizeFrame with a zoom ceiling', () => {
+  it('stops growing at the ceiling instead of zooming past it', () => {
+    const tiny: Rect = { x: 150, y: 300, width: 40, height: 30 };
+    const { frame, transform } = maximizeFrame(tiny, identity, STAGE, PAD, 3);
+    expect(transform.scale).toBeCloseTo(3, 6);
+    expect(frame.width).toBeCloseTo(120, 6);
+    expect(frame.height).toBeCloseTo(90, 6);
+  });
+
+  it('keeps a capped frame centred', () => {
+    const tiny: Rect = { x: 40, y: 500, width: 40, height: 30 };
+    const { frame } = maximizeFrame(tiny, identity, STAGE, PAD, 3);
+    expect(frame.x + frame.width / 2).toBeCloseTo(STAGE.width / 2, 6);
+    expect(frame.y + frame.height / 2).toBeCloseTo(STAGE.height / 2, 6);
+  });
+
+  it('still preserves the crop when capped', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const tiny: Rect = { x: 180, y: 330, width: 30, height: 20 };
+    const before = cropRectFromTransform(
+      identity,
+      baseSize,
+      tiny,
+      STAGE,
+      LANDSCAPE
+    );
+    const next = maximizeFrame(tiny, identity, STAGE, PAD, 4);
+    const after = cropRectFromTransform(
+      next.transform,
+      baseSize,
+      next.frame,
+      STAGE,
+      LANDSCAPE
+    );
+    expect(after).toEqual(before);
+  });
+
+  /**
+   * Linear interpolation of frame and transform with one curve must keep the
+   * crop fixed at every point, or the photo visibly slides inside the frame
+   * while it re-centres.
+   */
+  it('keeps the crop fixed at every point of the animation', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const start: Transform = { scale: 1.3, translateX: 12, translateY: -8 };
+    const dragged: Rect = { x: 60, y: 280, width: 150, height: 70 };
+    const end = maximizeFrame(dragged, start, STAGE, PAD);
+    const crop = (t: number) => {
+      const mix = (a: number, b: number) => a + (b - a) * t;
+      return cropRectFromTransform(
+        {
+          scale: mix(start.scale, end.transform.scale),
+          translateX: mix(start.translateX, end.transform.translateX),
+          translateY: mix(start.translateY, end.transform.translateY),
+        },
+        baseSize,
+        {
+          x: mix(dragged.x, end.frame.x),
+          y: mix(dragged.y, end.frame.y),
+          width: mix(dragged.width, end.frame.width),
+          height: mix(dragged.height, end.frame.height),
+        },
+        STAGE,
+        LANDSCAPE
+      );
+    };
+    const first = crop(0);
+    for (const t of [0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
+      const mid = crop(t);
+      expect(Math.abs(mid.originX - first.originX)).toBeLessThanOrEqual(1);
+      expect(Math.abs(mid.originY - first.originY)).toBeLessThanOrEqual(1);
+      expect(Math.abs(mid.width - first.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(mid.height - first.height)).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('transformForCrop', () => {
+  it('is the inverse of cropRectFromTransform', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const crop: CropRect = {
+      originX: 300,
+      originY: 120,
+      width: 800,
+      height: 450,
+    };
+    const frame = frameForAspect(STAGE, 800 / 450, PAD);
+    const transform = transformForCrop(crop, LANDSCAPE, baseSize, frame, STAGE);
+    expect(
+      cropRectFromTransform(transform, baseSize, frame, STAGE, LANDSCAPE)
+    ).toEqual(crop);
+  });
+
+  it('works for a frame that is not centred', () => {
+    const { baseSize } = freeSetup(SQUARE);
+    const crop: CropRect = {
+      originX: 100,
+      originY: 600,
+      width: 300,
+      height: 200,
+    };
+    const frame: Rect = { x: 30, y: 400, width: 150, height: 100 };
+    const transform = transformForCrop(crop, SQUARE, baseSize, frame, STAGE);
+    expect(
+      cropRectFromTransform(transform, baseSize, frame, STAGE, SQUARE)
+    ).toEqual(crop);
+  });
+
+  it('returns the identity for unusable input', () => {
+    const { baseSize } = freeSetup(SQUARE);
+    const frame = frameForAspect(STAGE, 1, PAD);
+    expect(
+      transformForCrop(
+        { originX: 0, originY: 0, width: 0, height: 10 },
+        SQUARE,
+        baseSize,
+        frame,
+        STAGE
+      )
+    ).toEqual(identity);
+  });
+});
+
+describe('fitCrop', () => {
+  it('shows the crop in the largest frame of its shape', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const crop: CropRect = { originX: 0, originY: 0, width: 900, height: 900 };
+    const { frame, transform } = fitCrop(
+      crop,
+      LANDSCAPE,
+      baseSize,
+      STAGE,
+      PAD,
+      Infinity
+    );
+    expect(frame.width).toBeCloseTo(360, 6);
+    expect(frame.height).toBeCloseTo(360, 6);
+    expect(
+      cropRectFromTransform(transform, baseSize, frame, STAGE, LANDSCAPE)
+    ).toEqual(crop);
+  });
+
+  it('shrinks the frame rather than zoom past the ceiling', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const crop: CropRect = {
+      originX: 700,
+      originY: 400,
+      width: 40,
+      height: 40,
+    };
+    const { frame, transform } = fitCrop(
+      crop,
+      LANDSCAPE,
+      baseSize,
+      STAGE,
+      PAD,
+      6
+    );
+    expect(transform.scale).toBeCloseTo(6, 6);
+    expect(frame.width).toBeLessThan(360);
+    expect(frame.x + frame.width / 2).toBeCloseTo(STAGE.width / 2, 6);
+    expect(
+      cropRectFromTransform(transform, baseSize, frame, STAGE, LANDSCAPE)
+    ).toEqual(crop);
+  });
+});
+
+describe('rotateCropRect', () => {
+  const crop: CropRect = { originX: 100, originY: 50, width: 400, height: 300 };
+
+  it('carries a rectangle through a clockwise quarter turn', () => {
+    // A 1600x900 image turned clockwise is 900x1600, and its old bottom-left
+    // corner becomes the new top-left.
+    expect(rotateCropRect(crop, LANDSCAPE, 1)).toEqual({
+      originX: 900 - 50 - 300,
+      originY: 100,
+      width: 300,
+      height: 400,
+    });
+  });
+
+  it('comes back to where it started after four turns', () => {
+    expect(rotateCropRect(crop, LANDSCAPE, 4)).toEqual(crop);
+  });
+
+  it('undoes a clockwise turn with an anticlockwise one', () => {
+    const turned = rotateCropRect(crop, LANDSCAPE, 1);
+    expect(rotateCropRect(turned, rotatedSize(LANDSCAPE, 90), -1)).toEqual(
+      crop
+    );
+  });
+
+  it('turns a half turn into a point reflection', () => {
+    expect(rotateCropRect(crop, LANDSCAPE, 2)).toEqual({
+      originX: 1600 - 100 - 400,
+      originY: 900 - 50 - 300,
+      width: 400,
+      height: 300,
+    });
+  });
+});
+
+describe('mirrorCropRect', () => {
+  const crop: CropRect = { originX: 100, originY: 50, width: 400, height: 300 };
+
+  it('mirrors left-to-right', () => {
+    expect(mirrorCropRect(crop, LANDSCAPE, 'horizontal')).toEqual({
+      ...crop,
+      originX: 1600 - 100 - 400,
+    });
+  });
+
+  it('mirrors top-to-bottom', () => {
+    expect(mirrorCropRect(crop, LANDSCAPE, 'vertical')).toEqual({
+      ...crop,
+      originY: 900 - 50 - 300,
+    });
+  });
+
+  it('is its own inverse', () => {
+    const twice = mirrorCropRect(
+      mirrorCropRect(crop, LANDSCAPE, 'horizontal'),
+      LANDSCAPE,
+      'horizontal'
+    );
+    expect(twice).toEqual(crop);
+  });
+});
+
+describe('reframe', () => {
+  const { baseSize } = freeSetup(LANDSCAPE);
+  const full = imageRect(baseSize, STAGE, identity);
+
+  it('keeps the subject under the frame centre', () => {
+    const zoomed: Transform = { scale: 2, translateX: 60, translateY: -20 };
+    const square = frameForAspect(STAGE, 1, PAD);
+    const next = reframe(full, zoomed, square, baseSize, STAGE, 6);
+    const subject = (frame: Rect, t: Transform) => {
+      const centre = frameCentreOffset(frame, STAGE);
+      return {
+        x: (centre.x - t.translateX) / t.scale,
+        y: (centre.y - t.translateY) / t.scale,
+      };
+    };
+    expect(subject(square, next).x).toBeCloseTo(subject(full, zoomed).x, 6);
+    expect(subject(square, next).y).toBeCloseTo(subject(full, zoomed).y, 6);
+  });
+
+  it('zooms in only as far as covering the new frame needs', () => {
+    const square = frameForAspect(STAGE, 1, PAD);
+    const next = reframe(full, identity, square, baseSize, STAGE, 6);
+    expect(next.scale).toBeCloseTo(minScaleToCover(baseSize, square), 6);
+  });
+
+  it('uses the preferred zoom instead of a zoom an earlier ratio forced', () => {
+    const square = frameForAspect(STAGE, 1, PAD);
+    const forced = reframe(full, identity, square, baseSize, STAGE, 6);
+    const wide = frameForAspect(STAGE, 16 / 9, PAD);
+    const next = reframe(square, forced, wide, baseSize, STAGE, 6, 1);
+    expect(next.scale).toBeCloseTo(1, 6);
+  });
+});
+
+describe('canvasMapping', () => {
+  /** Where a rectangle's corners land under a mapping, as a bounding box. */
+  function mappedBox(mapping: ReturnType<typeof canvasMapping>, rect: Rect) {
+    const centreX = STAGE.width / 2;
+    const centreY = STAGE.height / 2;
+    const corners = [
+      { x: rect.x, y: rect.y },
+      { x: rect.x + rect.width, y: rect.y },
+      { x: rect.x, y: rect.y + rect.height },
+      { x: rect.x + rect.width, y: rect.y + rect.height },
+    ].map((point) =>
+      applyMapping(mapping, { x: point.x - centreX, y: point.y - centreY })
+    );
+    const xs = corners.map((point) => point.x + centreX);
+    const ys = corners.map((point) => point.y + centreY);
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+    };
+  }
+
+  /**
+   * The property the turn animation rests on: at its first frame the turned
+   * scene must sit exactly where the old one was, or the photo jumps.
+   */
+  it('lands the turned frame exactly on the old one', () => {
+    const oldFrame: Rect = { x: 20, y: 250, width: 360, height: 200 };
+    const newFrame = frameForAspect(STAGE, 200 / 360, PAD);
+    const mapping = canvasMapping(oldFrame, newFrame, STAGE, -90);
+    expect(sameRect(mappedBox(mapping, newFrame), oldFrame, 1e-6)).toBe(true);
+  });
+
+  it('lands a mirrored frame exactly on the old one', () => {
+    const oldFrame: Rect = { x: 40, y: 260, width: 200, height: 150 };
+    const newFrame: Rect = {
+      ...oldFrame,
+      x: STAGE.width - oldFrame.x - oldFrame.width,
+    };
+    const mapping = canvasMapping(oldFrame, newFrame, STAGE, 0, -1, 1);
+    expect(mapping.x).toBeCloseTo(0, 6);
+    expect(sameRect(mappedBox(mapping, newFrame), oldFrame, 1e-6)).toBe(true);
+  });
+
+  it('is the identity when nothing changed', () => {
+    const frame = frameForAspect(STAGE, 1, PAD);
+    const mapping = canvasMapping(frame, frame, STAGE, 0);
+    expect(mapping.x).toBeCloseTo(0, 6);
+    expect(mapping.y).toBeCloseTo(0, 6);
+    expect(mapping.scale).toBeCloseTo(1, 6);
+    expect(mapping.angle).toBe(0);
+  });
+
+  it('turns clockwise for a positive angle', () => {
+    const mapping = { ...IDENTITY_MAPPING, angle: 90 };
+    // On a y-down screen, clockwise takes "right" to "down".
+    const point = applyMapping(mapping, { x: 10, y: 0 });
+    expect(point.x).toBeCloseTo(0, 6);
+    expect(point.y).toBeCloseTo(10, 6);
+  });
+});
+
+describe('composeMappings', () => {
+  const samples = [
+    { x: 0, y: 0 },
+    { x: 30, y: -12 },
+    { x: -7, y: 44 },
+  ];
+  const mappings = [
+    { x: 5, y: -3, angle: 90, scale: 1.4, flipX: 1, flipY: 1 },
+    { x: -12, y: 8, angle: -90, scale: 0.7, flipX: -1, flipY: 1 },
+    { x: 2, y: 2, angle: 180, scale: 1, flipX: 1, flipY: -1 },
+  ] as const;
+
+  it('matches applying one mapping after the other', () => {
+    for (const a of mappings) {
+      for (const b of mappings) {
+        const both = composeMappings(a, b);
+        for (const point of samples) {
+          const expected = applyMapping(a, applyMapping(b, point));
+          const actual = applyMapping(both, point);
+          expect(actual.x).toBeCloseTo(expected.x, 6);
+          expect(actual.y).toBeCloseTo(expected.y, 6);
+        }
+      }
+    }
+  });
+
+  it('leaves a mapping unchanged when composed with the identity', () => {
+    const [first] = mappings;
+    expect(composeMappings(IDENTITY_MAPPING, first)).toEqual(first);
+    expect(composeMappings(first, IDENTITY_MAPPING)).toEqual(first);
   });
 });

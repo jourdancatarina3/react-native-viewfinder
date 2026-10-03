@@ -2,7 +2,9 @@ import type { RenderResult } from '@testing-library/react-native';
 import { act } from '@testing-library/react-native';
 import { createRef } from 'react';
 import { Image, Text, View } from 'react-native';
+import { getAnimatedStyle } from 'react-native-reanimated';
 import { ImageCropper } from '../components/ImageCropper';
+import { CROP_ANIMATION_DURATION } from '../core/constants';
 import type { ImageComponentProps, ImageCropperRef } from '../types';
 import { render } from './render';
 
@@ -35,14 +37,53 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-/** Collapses a style array into one object, as React Native would. */
+/**
+ * Collapses a style array into one object, as React Native would, and returns
+ * where the view's top-left ends up. Handles are placed with a translate so
+ * they move on the UI thread, so the translate counts as much as the offset.
+ */
 function flatten(style: unknown): { left: number; top: number } {
   const parts = Array.isArray(style) ? style.flat(Infinity) : [style];
   const merged = Object.assign({}, ...parts.filter(Boolean)) as {
     left?: number;
     top?: number;
+    transform?: Record<string, number>[];
   };
-  return { left: merged.left ?? 0, top: merged.top ?? 0 };
+  const shift = (key: 'translateX' | 'translateY') =>
+    (merged.transform ?? []).reduce((sum, step) => sum + (step[key] ?? 0), 0);
+  return {
+    left: (merged.left ?? 0) + shift('translateX'),
+    top: (merged.top ?? 0) + shift('translateY'),
+  };
+}
+
+/**
+ * A view's live animated style. The handles move on the UI thread, so their
+ * props only hold what the last React render saw. Reanimated's own typing of
+ * `getAnimatedStyle` differs between versions, hence the one cast here.
+ */
+function liveStyle(element: unknown): unknown {
+  return (getAnimatedStyle as unknown as (target: unknown) => unknown)(element);
+}
+
+/**
+ * Lets queued UI-thread work run. The cropper applies layout changes on the UI
+ * thread, which Reanimated's test build runs on the next animation frame.
+ */
+async function nextFrame() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+}
+
+/**
+ * Lets the cropper's frame-and-image animations run to the end. Reanimated's
+ * test build steps animations on timers, so this needs fake timers on.
+ */
+async function finishAnimations(extra = 0) {
+  await act(async () => {
+    jest.advanceTimersByTime(CROP_ANIMATION_DURATION + extra + 100);
+  });
 }
 
 async function setup(props: Record<string, unknown> = {}) {
@@ -343,6 +384,120 @@ describe('ImageCropper', () => {
       expect(result.crop.width).toBe(1600);
       expect(result.crop.height).toBe(900);
     });
+
+    it('a quarter turn keeps the crop, turned with the picture', async () => {
+      const { ref } = await setup();
+      await act(async () => {
+        ref.current?.rotate();
+      });
+      expect(ref.current!.getResult()!.crop).toEqual({
+        originX: 0,
+        originY: 0,
+        width: 900,
+        height: 1600,
+      });
+    });
+
+    it('a locked ratio turns on its side with the picture', async () => {
+      const { ref } = await setup({ aspectRatio: 16 / 9 });
+      await act(async () => {
+        ref.current?.rotate();
+      });
+      const { crop } = ref.current!.getResult()!;
+      expect(crop.width).toBe(900);
+      expect(crop.height).toBe(1600);
+    });
+
+    it('four turns bring back the same crop', async () => {
+      const { ref } = await setup();
+      await act(async () => {
+        ref.current?.setAspectRatio(1);
+      });
+      const before = ref.current!.getResult()!.crop;
+      await act(async () => {
+        for (let i = 0; i < 4; i++) {
+          ref.current?.rotate();
+        }
+      });
+      const after = ref.current!.getResult()!.crop;
+      expect(Math.abs(after.originX - before.originX)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.originY - before.originY)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.width - before.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(1);
+    });
+
+    /**
+     * Commands animate, but the result must describe where they are going: an
+     * app that calls `rotate()` and then `getResult()` in the same tick must
+     * get the rotated crop, not a frame of the animation.
+     */
+    it('describes the destination straight after a command', async () => {
+      const { ref } = await setup();
+      let crop: unknown;
+      await act(async () => {
+        ref.current?.rotate();
+        crop = ref.current?.getResult()?.crop;
+      });
+      expect(crop).toEqual({
+        originX: 0,
+        originY: 0,
+        width: 900,
+        height: 1600,
+      });
+    });
+
+    it('flipping keeps the size of the crop', async () => {
+      const { ref } = await setup();
+      await act(async () => {
+        ref.current?.setAspectRatio(1);
+      });
+      const before = ref.current!.getResult()!.crop;
+      await act(async () => {
+        ref.current?.flip('horizontal');
+      });
+      const after = ref.current!.getResult()!.crop;
+      expect(after.width).toBe(before.width);
+      expect(after.height).toBe(before.height);
+    });
+
+    /**
+     * Rotation is applied before the flips, so with one flip on, a clockwise
+     * turn of the source would turn the picture anticlockwise on screen. The
+     * button must turn what the user sees clockwise.
+     */
+    it('turns the picture clockwise on screen even when it is mirrored', async () => {
+      const { ref } = await setup();
+      await act(async () => {
+        ref.current?.flip('horizontal');
+      });
+      await act(async () => {
+        ref.current?.rotate();
+      });
+      expect(ref.current!.getResult()!.rotate).toBe(270);
+    });
+
+    it('reset unwinds turns and flips back to the whole image', async () => {
+      const { ref } = await setup();
+      await act(async () => {
+        ref.current?.setAspectRatio(1);
+        ref.current?.rotate();
+        ref.current?.flip('vertical');
+        ref.current?.rotate();
+      });
+      await act(async () => {
+        ref.current?.reset();
+      });
+      const result = ref.current!.getResult()!;
+      expect(result.rotate).toBe(0);
+      expect(result.flipHorizontal).toBe(false);
+      expect(result.flipVertical).toBe(false);
+      expect(result.crop).toEqual({
+        originX: 0,
+        originY: 0,
+        width: 1600,
+        height: 900,
+      });
+    });
   });
 
   describe('onCropChange', () => {
@@ -387,6 +542,30 @@ describe('ImageCropper', () => {
       expect(chip.props.accessibilityState).toMatchObject({ selected: true });
     });
 
+    it('shows a turned ratio the right way round', async () => {
+      const { ref, view } = await setup({ aspectRatio: 16 / 9 });
+      await act(async () => {
+        ref.current?.rotate();
+      });
+      const chip = view.getByTestId('c-toolbar-aspect-16:9');
+      expect(chip.props.accessibilityState).toMatchObject({ selected: true });
+      expect(chip.props.accessibilityLabel).toBe('Aspect ratio 9:16');
+    });
+
+    it('prefers an exact preset over a turned one', async () => {
+      const { ref, view } = await setup({ aspectRatio: 4 / 3 });
+      await act(async () => {
+        ref.current?.rotate();
+      });
+      // 4:3 turned is 3:4, which has a chip of its own.
+      expect(
+        view.getByTestId('c-toolbar-aspect-3:4').props.accessibilityState
+      ).toMatchObject({ selected: true });
+      expect(
+        view.getByTestId('c-toolbar-aspect-4:3').props.accessibilityState
+      ).toMatchObject({ selected: false });
+    });
+
     it('labels every control', async () => {
       const { view } = await setup();
       expect(view.getByLabelText('Rotate')).toBeTruthy();
@@ -422,11 +601,12 @@ describe('ImageCropper', () => {
      */
     it('positions the handles around the image for a free crop', async () => {
       const { view } = await setup({ aspectRatio: 'free' });
+      await nextFrame();
       const topLeft = view.getByTestId('c-overlay-handle-topLeft');
       const bottomRight = view.getByTestId('c-overlay-handle-bottomRight');
 
-      const tl = flatten(topLeft.props.style);
-      const br = flatten(bottomRight.props.style);
+      const tl = flatten(liveStyle(topLeft));
+      const br = flatten(liveStyle(bottomRight));
 
       // Not stacked at the origin, which is what a zero-sized frame produces.
       expect(br.left).toBeGreaterThan(tl.left + 100);
@@ -434,20 +614,29 @@ describe('ImageCropper', () => {
     });
 
     it('moves the handles when the ratio changes', async () => {
-      const { ref, view } = await setup({ aspectRatio: 'free' });
-      const before = flatten(
-        view.getByTestId('c-overlay-handle-bottomRight').props.style
-      );
+      jest.useFakeTimers();
+      try {
+        const { ref, view } = await setup({ aspectRatio: 'free' });
+        await finishAnimations();
+        const before = flatten(
+          liveStyle(view.getByTestId('c-overlay-handle-bottomRight'))
+        );
 
-      await act(async () => {
-        ref.current?.setAspectRatio(1);
-      });
+        await act(async () => {
+          ref.current?.setAspectRatio(1);
+        });
+        await finishAnimations();
 
-      const after = flatten(
-        view.getByTestId('c-overlay-handle-bottomRight').props.style
-      );
-      // A 1:1 frame is much taller than the fitted 16:9 image.
-      expect(after.top).toBeGreaterThan(before.top);
+        // The handle moves on the UI thread, so read its live animated style;
+        // the props only hold what the last React render saw.
+        const after = flatten(
+          liveStyle(view.getByTestId('c-overlay-handle-bottomRight'))
+        );
+        // A 1:1 frame is much taller than the fitted 16:9 image.
+        expect(after.top).toBeGreaterThan(before.top);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 

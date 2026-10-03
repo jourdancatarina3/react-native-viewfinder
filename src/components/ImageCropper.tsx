@@ -41,9 +41,11 @@ const EMPTY_SIZE: Size = { width: 0, height: 0 };
  * `react-native-viewfinder/expo-image-manipulator` for a one-call helper that
  * turns the result into a file.
  *
- * The interaction is the one the phone photo editors use: the image covers the
- * frame and can only be zoomed further in, so there is no way to leave a gap
- * inside the crop.
+ * The interaction is the one the Photos app uses: the image always covers the
+ * frame, so there is no way to leave a gap inside the crop. Drag a handle and
+ * the photo holds still under it; let go, and after a moment the frame grows
+ * back to fill the screen while the photo zooms to keep exactly what you
+ * framed. Quarter turns and flips carry the crop with the picture.
  *
  * Must be rendered inside a `GestureHandlerRootView`.
  */
@@ -168,38 +170,43 @@ export const ImageCropper = forwardRef<ImageCropperRef, ImageCropperProps>(
           onLayout={onLayout}
           testID={testID ? `${testID}-stage` : undefined}
         >
-          <GestureDetector gesture={cropper.imageGesture as never}>
-            <Animated.View style={styles.fill} collapsable={false}>
-              <Animated.View style={[styles.centred, cropper.animatedStyle]}>
-                <Animated.View style={cropper.orientationStyle}>
-                  <ImageSurface
-                    item={item}
-                    size={cropper.baseSize}
-                    state={state}
-                    {...(ImageComponent ? { ImageComponent } : null)}
-                    onLoad={handleLoad}
-                    onError={reportError}
-                    retry={retry}
-                    {...(renderLoading ? { renderLoading } : null)}
-                    {...(renderError ? { renderError } : null)}
-                    {...(testID ? { testID: `${testID}-surface` } : null)}
-                  />
-                </Animated.View>
+          {/* The photo and its frame share one transform, so a turn or a
+              flip moves them together as one piece. */}
+          <Animated.View style={[styles.canvas, cropper.canvasStyle]}>
+            <GestureDetector gesture={cropper.imageGesture as never}>
+              <Animated.View style={styles.fill} collapsable={false}>
+                <View style={styles.centred} pointerEvents="box-none">
+                  <Animated.View style={cropper.imageStyle}>
+                    <ImageSurface
+                      item={item}
+                      size={cropper.imageSize}
+                      state={state}
+                      {...(ImageComponent ? { ImageComponent } : null)}
+                      onLoad={handleLoad}
+                      onError={reportError}
+                      retry={retry}
+                      {...(renderLoading ? { renderLoading } : null)}
+                      {...(renderError ? { renderError } : null)}
+                      {...(testID ? { testID: `${testID}-surface` } : null)}
+                    />
+                  </Animated.View>
+                </View>
               </Animated.View>
-            </Animated.View>
-          </GestureDetector>
+            </GestureDetector>
 
-          <CropOverlay
-            frame={cropper.frame}
-            containerSize={containerSize}
-            interacting={cropper.interacting}
-            resizable={resizableFrame}
-            onHandleStart={cropper.beginFrameDrag}
-            onHandleMove={cropper.dragFrame}
-            onHandleEnd={cropper.endFrameDrag}
-            scrimColor={scrimColor}
-            {...(testID ? { testID: `${testID}-overlay` } : null)}
-          />
+            {cropper.ready ? (
+              <CropOverlay
+                frame={cropper.frame}
+                interacting={cropper.interacting}
+                resizable={resizableFrame}
+                onHandleStart={cropper.beginFrameDrag}
+                onHandleMove={cropper.dragFrame}
+                onHandleEnd={cropper.endFrameDrag}
+                scrimColor={scrimColor}
+                {...(testID ? { testID: `${testID}-overlay` } : null)}
+              />
+            ) : null}
+          </Animated.View>
         </View>
 
         {toolbar}
@@ -215,6 +222,13 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     overflow: 'hidden',
+  },
+  canvas: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   fill: {
     flex: 1,

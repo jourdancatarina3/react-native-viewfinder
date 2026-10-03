@@ -37,6 +37,10 @@ function CropToolbarComponent({
   showAspectRatios = true,
   testID,
 }: CropToolbarProps) {
+  const hasExactPreset = presets.some((preset) =>
+    isSame(preset.value, aspectRatio)
+  );
+
   return (
     <View style={styles.root} testID={testID}>
       {showAspectRatios ? (
@@ -47,14 +51,20 @@ function CropToolbarComponent({
           testID={testID ? `${testID}-aspects` : undefined}
         >
           {presets.map((preset) => {
-            const selected = isSame(preset.value, aspectRatio);
+            // A quarter turn inverts a locked ratio, so after one a 16:9 crop
+            // is 9:16. Its chip stays selected and says so — unless the list
+            // has a 9:16 of its own, which then lights up instead.
+            const turned =
+              !hasExactPreset && isTurned(preset.value, aspectRatio);
+            const selected = turned || isSame(preset.value, aspectRatio);
+            const label = turned ? turnLabel(preset.label) : preset.label;
             return (
               <Pressable
                 key={preset.label}
                 onPress={() => onAspectRatioChange(preset.value)}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`Aspect ratio ${preset.label}`}
+                accessibilityLabel={`Aspect ratio ${label}`}
                 testID={testID ? `${testID}-aspect-${preset.label}` : undefined}
                 style={({ pressed }) => [
                   styles.chip,
@@ -65,7 +75,7 @@ function CropToolbarComponent({
                 <Text
                   style={[styles.chipText, selected && styles.chipTextSelected]}
                 >
-                  {preset.label}
+                  {label}
                 </Text>
               </Pressable>
             );
@@ -145,6 +155,22 @@ function isSame(a: AspectRatio, b: AspectRatio): boolean {
     return Math.abs(a - b) < 1e-6;
   }
   return a === b;
+}
+
+/** Whether `current` is `preset` turned on its side. Squares never are. */
+function isTurned(preset: AspectRatio, current: AspectRatio): boolean {
+  return (
+    typeof preset === 'number' &&
+    typeof current === 'number' &&
+    Math.abs(preset - 1) > 1e-6 &&
+    Math.abs(preset * current - 1) < 1e-6
+  );
+}
+
+/** "16:9" → "9:16". Labels in any other form are left alone. */
+function turnLabel(label: string): string {
+  const match = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(label);
+  return match ? `${match[2]}:${match[1]}` : label;
 }
 
 const styles = StyleSheet.create({

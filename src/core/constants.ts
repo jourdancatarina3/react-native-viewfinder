@@ -51,6 +51,21 @@ export const DECELERATION = 0.998;
 /** Duration, in ms, of the open/close and double-tap animations. */
 export const TIMING_DURATION = 260;
 
+/**
+ * Duration, in ms, of the cropper's frame-and-image animations: re-centring
+ * after a handle drag, ratio changes, quarter turns, flips and reset. A little
+ * slower than {@link TIMING_DURATION}, because the frame and the photo move
+ * together and the eye needs time to follow both.
+ */
+export const CROP_ANIMATION_DURATION = 360;
+
+/**
+ * Pause, in ms, between letting go of a crop handle and the frame re-centring.
+ * Long enough to grab another handle first, as in the Photos app, so a crop
+ * can be adjusted edge by edge without the picture moving between touches.
+ */
+export const CROP_SETTLE_DELAY = 600;
+
 /** Spring used when settling the image back inside its bounds. */
 export const SETTLE_SPRING = {
   damping: 30,

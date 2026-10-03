@@ -47,24 +47,28 @@ name: Crop, rotate, flip
     id: 'crop-readout'
     text: '2000×1125'
 
-# A quarter turn swaps which axis is constrained.
+# A quarter turn keeps the crop and turns it with the picture: the 16:9
+# region becomes the same region, 9:16.
 - tapOn:
     id: 'cropper-toolbar-rotate'
 - assertVisible:
     id: 'crop-readout'
-    text: '1333×750'
+    text: '1125×2000'
+- assertVisible:
+    id: 'cropper-toolbar-aspect-16:9'
+    text: 'Aspect ratio 9:16'
 
-# Flips do not change the region's size.
+# Flips mirror the picture and keep the region.
 - tapOn:
     id: 'cropper-toolbar-flip-h'
 - assertVisible:
     id: 'crop-readout'
-    text: '1333×750'
+    text: '1125×2000'
 - tapOn:
     id: 'cropper-toolbar-flip-v'
 - assertVisible:
     id: 'crop-readout'
-    text: '1333×750'
+    text: '1125×2000'
 
 # Reset returns to the whole image.
 - tapOn:
@@ -90,6 +94,38 @@ name: Crop, rotate, flip
 - assertNotVisible:
     id: 'crop-readout'
     text: '1333×1333'
+
+# A free crop: dragging a corner in shrinks the region, and after the frame
+# re-centres and the photo zooms to fill it, the region is unchanged.
+- tapOn:
+    id: 'cropper-toolbar-reset'
+- waitForAnimationToEnd
+- swipe:
+    from:
+      id: 'cropper-overlay-handle-bottomRight'
+    direction: LEFT
+- copyTextFrom:
+    id: 'crop-readout'
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: 'crop-readout'
+    text: '2000×1333'
+- assertVisible:
+    id: 'crop-readout'
+    text: ${maestro.copiedText}
+
+# And the file is exactly that region.
+- tapOn:
+    id: 'crop-apply'
+- extendedWaitUntil:
+    visible:
+      id: 'crop-output'
+    timeout: 20000
+- assertVisible:
+    id: 'crop-output-size'
+    text: ${maestro.copiedText}
+- tapOn:
+    id: 'crop-again'
 
 # Producing the file actually works, and reports the output dimensions.
 - tapOn:
