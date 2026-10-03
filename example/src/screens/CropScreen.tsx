@@ -7,9 +7,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { CropResult, ImageCropperRef } from 'react-native-viewfinder';
-import { ImageCropper } from 'react-native-viewfinder';
-import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
+import type {
+  CropResult,
+  ImageCropperRef,
+} from 'react-native-image-viewfinder';
+import { ImageCropper } from 'react-native-image-viewfinder';
+import { applyCrop } from 'react-native-image-viewfinder/expo-image-manipulator';
 import { PHOTOS } from '../data/photos';
 
 const PHOTO = PHOTOS[0]!;

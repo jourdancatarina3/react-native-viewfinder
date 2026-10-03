@@ -2,7 +2,7 @@
  * Pre-wired `expo-image` variants of the components.
  *
  * ```tsx
- * import { Gallery, ZoomableImage } from 'react-native-viewfinder/expo-image';
+ * import { Gallery, ZoomableImage } from 'react-native-image-viewfinder/expo-image';
  * ```
  *
  * Importing from this path gives you blurhash placeholders, progressive

@@ -178,7 +178,7 @@ candidate for a later release rather than something half-built now.
 `<ImageCropper>` performs no image processing: `getResult()` gives you a rectangle, a
 rotation and two flip flags. Producing a file needs a native module, which the library
 deliberately does not depend on — see DECISIONS.md D-014. Use
-`react-native-viewfinder/expo-image-manipulator` (one extra call), a manipulator of your
+`react-native-image-viewfinder/expo-image-manipulator` (one extra call), a manipulator of your
 own, or send the geometry to a server and never upload the full image at all.
 
 ### 5. No filters or colour adjustment

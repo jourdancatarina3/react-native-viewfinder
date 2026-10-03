@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+import { HAS_HOOK_GESTURE_API } from 'react-native-image-viewfinder';
 import { AccessibilityScreen } from './screens/AccessibilityScreen';
 import { AspectRatiosScreen } from './screens/AspectRatiosScreen';
 import { CropScreen } from './screens/CropScreen';

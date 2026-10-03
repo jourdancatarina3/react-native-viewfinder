@@ -3,7 +3,7 @@
  * `expo-image-manipulator`.
  *
  * ```tsx
- * import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
+ * import { applyCrop } from 'react-native-image-viewfinder/expo-image-manipulator';
  *
  * const result = cropperRef.current?.getResult();
  * if (result) {
@@ -12,7 +12,7 @@
  * ```
  *
  * A separate entry point rather than part of the main export, for the same
- * reason as `react-native-viewfinder/expo-image`: Metro resolves imports when
+ * reason as `react-native-image-viewfinder/expo-image`: Metro resolves imports when
  * it bundles, so a guarded `require` of an optional dependency either breaks
  * the build for apps without it or never resolves for apps with it. Importing
  * this path is the opt-in. See docs/DECISIONS.md D-009.

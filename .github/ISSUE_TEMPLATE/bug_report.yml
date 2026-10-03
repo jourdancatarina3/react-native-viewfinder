@@ -56,7 +56,7 @@ body:
       description: |
         Log this in your app and paste the result:
         ```tsx
-        import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+        import { HAS_HOOK_GESTURE_API } from 'react-native-image-viewfinder';
         console.log(HAS_HOOK_GESTURE_API);
         ```
       options:

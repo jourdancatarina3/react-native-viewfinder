@@ -79,7 +79,7 @@ The five things that resolve most reports:
 4. Architecture — new or old
 5. The value of `HAS_HOOK_GESTURE_API`:
    ```tsx
-   import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+   import { HAS_HOOK_GESTURE_API } from 'react-native-image-viewfinder';
    console.log(HAS_HOOK_GESTURE_API);
    ```
 

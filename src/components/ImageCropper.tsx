@@ -38,7 +38,7 @@ const EMPTY_SIZE: Size = { width: 0, height: 0 };
  * rotation and flips, in the shape `expo-image-manipulator` and the other
  * native manipulators already expect. The cropper itself performs no image
  * processing and adds no native dependency — see
- * `react-native-viewfinder/expo-image-manipulator` for a one-call helper that
+ * `react-native-image-viewfinder/expo-image-manipulator` for a one-call helper that
  * turns the result into a file.
  *
  * The interaction is the one the Photos app uses: the image always covers the

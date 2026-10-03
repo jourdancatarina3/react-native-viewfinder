@@ -130,7 +130,7 @@ produced, rather than by assumption:
   **ESM-only** (`module` target with `esm: true`) plus a `typescript` target. See
   DECISIONS.md for why this library additionally emits CJS.
 - **`exports` map.** The scaffold emits a custom source condition
-  (`react-native-viewfinder-source`) pointing at `src/`, which lets the example app and
+  (`react-native-image-viewfinder-source`) pointing at `src/`, which lets the example app and
   TypeScript resolve straight to source in the monorepo while consumers get built output.
   `tsconfig` opts in via `customConditions`.
 - **TypeScript.** Strict, plus `noUncheckedIndexedAccess`, `noUnusedLocals`,
@@ -212,7 +212,7 @@ a rule-of-thirds overlay that appears only while you are moving, and 44pt touch 
 It reports **geometry only**: a rectangle in the source image's own pixels, in the exact
 shape `expo-image-manipulator` and `@react-native-community/image-editor` already accept.
 That keeps the zero-native-dependency promise intact — the cropper itself processes no
-pixels — while `react-native-viewfinder/expo-image-manipulator` makes producing a file a
+pixels — while `react-native-image-viewfinder/expo-image-manipulator` makes producing a file a
 single call for those who want it.
 
 ### Scope: what changed, and what is still out

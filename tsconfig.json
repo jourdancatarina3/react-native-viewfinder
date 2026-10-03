@@ -2,16 +2,16 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-viewfinder": ["./src/index"],
-      "react-native-viewfinder/expo-image": ["./src/expo-image"],
-      "react-native-viewfinder/expo-image-manipulator": [
+      "react-native-image-viewfinder": ["./src/index"],
+      "react-native-image-viewfinder/expo-image": ["./src/expo-image"],
+      "react-native-image-viewfinder/expo-image-manipulator": [
         "./src/expo-image-manipulator"
       ]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "customConditions": [
-      "react-native-viewfinder-source",
+      "react-native-image-viewfinder-source",
       "react-native-strict-api"
     ],
     "esModuleInterop": true,

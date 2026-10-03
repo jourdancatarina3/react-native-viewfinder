@@ -1,4 +1,4 @@
-# react-native-viewfinder
+# react-native-image-viewfinder
 
 **Zoom, browse and crop images in React Native.** No native code, no config plugin, no
 version lock-in.
@@ -60,7 +60,7 @@ escape hatch.
 ## Install
 
 ```sh
-npm install react-native-viewfinder
+npm install react-native-image-viewfinder
 ```
 
 You also need the two peers, which most apps already have:
@@ -114,7 +114,7 @@ A thumbnail grid that opens a full-screen gallery:
 ```tsx
 import { useState } from 'react';
 import { Image, Pressable, ScrollView } from 'react-native';
-import { Gallery } from 'react-native-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 
 const photos = [
   'https://example.com/1.jpg',
@@ -149,7 +149,7 @@ export function Album() {
 A single zoomable image:
 
 ```tsx
-import { ZoomableImage } from 'react-native-viewfinder';
+import { ZoomableImage } from 'react-native-image-viewfinder';
 
 <ZoomableImage source="https://example.com/photo.jpg" />;
 ```
@@ -158,9 +158,9 @@ Cropping, with the result saved to a file:
 
 ```tsx
 import { useRef } from 'react';
-import { ImageCropper } from 'react-native-viewfinder';
-import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
-import type { ImageCropperRef } from 'react-native-viewfinder';
+import { ImageCropper } from 'react-native-image-viewfinder';
+import { applyCrop } from 'react-native-image-viewfinder/expo-image-manipulator';
+import type { ImageCropperRef } from 'react-native-image-viewfinder';
 
 const cropper = useRef<ImageCropperRef>(null);
 
@@ -444,7 +444,7 @@ npx expo install expo-image-manipulator
 ```
 
 ```tsx
-import { applyCrop } from 'react-native-viewfinder/expo-image-manipulator';
+import { applyCrop } from 'react-native-image-viewfinder/expo-image-manipulator';
 
 const result = cropperRef.current?.getResult();
 if (result) {
@@ -511,7 +511,7 @@ import { Image } from 'expo-image';
 or import the pre-wired entry point:
 
 ```tsx
-import { Gallery } from 'react-native-viewfinder/expo-image';
+import { Gallery } from 'react-native-image-viewfinder/expo-image';
 ```
 
 Either gives you blurhash placeholders and progressive decoding. Without `expo-image`,
@@ -575,7 +575,7 @@ It should not — that is a bug. Please open an issue with your gesture handler 
 the output of `HAS_HOOK_GESTURE_API`:
 
 ```tsx
-import { HAS_HOOK_GESTURE_API } from 'react-native-viewfinder';
+import { HAS_HOOK_GESTURE_API } from 'react-native-image-viewfinder';
 console.log('RGH hook API:', HAS_HOOK_GESTURE_API);
 ```
 

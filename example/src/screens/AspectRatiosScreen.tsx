@@ -1,4 +1,4 @@
-import { Gallery } from 'react-native-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 import { ASPECT_RATIOS } from '../data/photos';
 
 /**

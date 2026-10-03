@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Gallery } from 'react-native-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 import { UNRELIABLE } from '../data/photos';
 
 /**

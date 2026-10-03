@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { ZoomableImageRef } from 'react-native-viewfinder';
-import { ZoomableImage } from 'react-native-viewfinder';
+import type { ZoomableImageRef } from 'react-native-image-viewfinder';
+import { ZoomableImage } from 'react-native-image-viewfinder';
 import { PHOTOS } from '../data/photos';
 
 /**

@@ -37,7 +37,7 @@ covered by the E2E suite instead.
 | `06-errors` | Dead host, 404, slow response, error slot, retry, swiping off a failed page |
 | `07-rotation` | Rotating mid-zoom, paging in landscape, returning to portrait |
 | `08-accessibility` | Reduced motion on, every interaction still working, screen-reader labels |
-| `09-expo-image` | The `react-native-viewfinder/expo-image` subpath resolves and behaves identically |
+| `09-expo-image` | The `react-native-image-viewfinder/expo-image` subpath resolves and behaves identically |
 | `10-crop` | Ratio presets, rotate, flip, reset, handle drag, and producing a real output file |
 
 ### Six bugs this found that the unit suite could not

@@ -17,11 +17,14 @@ genuinely yours.
 
 ### ☐ 1.1 Decide the package name *(5 min, one-time)*
 
-The repo is currently set up as **`react-native-viewfinder`**, which was available on npm
-when this was written. Names get taken, so check again before you commit to it:
+The package is **`react-native-image-viewfinder`**; the GitHub repo keeps its original name,
+`react-native-viewfinder`. That shorter name was free on the registry, but `npm publish`
+refused it: npm compares names with the punctuation stripped, so it counts as the same
+name as the existing `react-native-view-finder`. A 404 from `npm view` only means a name
+is unused, not that npm will accept it. Names get taken, so check again before publishing:
 
 ```sh
-npm view react-native-viewfinder
+npm view react-native-image-viewfinder
 ```
 
 - **`npm ERR! 404`** → available. Good, skip to 1.2.
@@ -29,25 +32,25 @@ npm view react-native-viewfinder
 
 **Scoped or unscoped?**
 
-| | Unscoped (`react-native-viewfinder`) | Scoped (`@jourdan/react-native-viewfinder`) |
+| | Unscoped (`react-native-image-viewfinder`) | Scoped (`@jourdancatarina3/react-native-image-viewfinder`) |
 | --- | --- | --- |
 | Availability | First come, first served | Always available under your own scope |
 | Discoverability | Better — matches how people search | Slightly worse |
 | Publishing a public scoped package | — | Needs `--access public` on the **first** publish |
 
 Unscoped is the better default for a library you want people to find. Scoped is a fine
-fallback if the name is gone. `@jourdan/react-native-viewfinder` was also free.
+fallback if the name is gone or refused: your own scope is always accepted.
 
 **If you change the name**, these places reference it and all need updating:
 
 ```sh
 # See everywhere it appears
-grep -rn "react-native-viewfinder" --include="*.json" --include="*.md" --include="*.ts" \
+grep -rn "react-native-image-viewfinder" --include="*.json" --include="*.md" --include="*.ts" \
   --include="*.tsx" --include="*.js" --include="*.mjs" --include="*.yml" \
   . | grep -v node_modules | grep -v "/lib/"
 ```
 
-The ones that matter: `package.json` (`name`, the `react-native-viewfinder-source`
+The ones that matter: `package.json` (`name`, the `react-native-image-viewfinder-source`
 export condition, and every path inside `exports`), `tsconfig.json` (`paths` and
 `customConditions`), `example/package.json`, the imports in `example/src/**`, and the
 README.
@@ -105,7 +108,7 @@ Two options. **Trusted publishing is strictly better** — pick it unless someth
 verifies the publish came from your specific GitHub Actions workflow.
 
 1. Publish version `0.1.0` manually first (Part 6) — the package must exist.
-2. <https://www.npmjs.com/package/react-native-viewfinder/access> → **Trusted Publisher**.
+2. <https://www.npmjs.com/package/react-native-image-viewfinder/access> → **Trusted Publisher**.
 3. Add: organization `jourdancatarina3`, repository `react-native-viewfinder`,
    workflow `release.yml`.
 4. The provided `.github/workflows/release.yml` already requests `id-token: write`, which
@@ -250,7 +253,7 @@ file, a peer dependency you forgot to declare.
 ```sh
 # 1. Build a real tarball from the library
 cd /path/to/react-native-viewfinder
-yarn build && npm pack           # produces react-native-viewfinder-0.1.0.tgz
+yarn build && npm pack           # produces react-native-image-viewfinder-0.1.0.tgz
 
 # 2. Brand new app somewhere else entirely
 cd /tmp
@@ -259,14 +262,14 @@ cd install-test
 npx expo install react-native-reanimated react-native-gesture-handler
 
 # 3. Install from the tarball, exactly as a user would
-npm install /path/to/react-native-viewfinder/react-native-viewfinder-0.1.0.tgz
+npm install /path/to/react-native-viewfinder/react-native-image-viewfinder-0.1.0.tgz
 ```
 
 Replace `App.tsx` with:
 
 ```tsx
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Gallery } from 'react-native-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 
 export default function App() {
   return (
@@ -294,8 +297,8 @@ Check:
 - ☐ **Bundles without `expo-image` and `expo-image-manipulator` installed** — this is the
       whole point of them being optional subpath imports, and it is the easiest thing to
       break. Only add them in a second pass.
-- ☐ With them installed, `react-native-viewfinder/expo-image` and
-      `react-native-viewfinder/expo-image-manipulator` both resolve
+- ☐ With them installed, `react-native-image-viewfinder/expo-image` and
+      `react-native-image-viewfinder/expo-image-manipulator` both resolve
 - ☐ Autocomplete on `<Gallery ` shows the props with their JSDoc
 - ☐ `npx tsc --noEmit` passes
 
@@ -403,8 +406,8 @@ You will be prompted for your 2FA code.
 ### ☐ 6.3 Verify immediately *(5 min)*
 
 ```sh
-npm view react-native-viewfinder
-open https://www.npmjs.com/package/react-native-viewfinder
+npm view react-native-image-viewfinder
+open https://www.npmjs.com/package/react-native-image-viewfinder
 ```
 
 Check the README renders, the GIFs load, the version is `0.1.0`, and the repository link
@@ -465,10 +468,10 @@ npm publish --tag beta        # users get it only via `npm install pkg@beta`
 
 ```sh
 # Within 72 hours
-npm unpublish react-native-viewfinder@0.2.0
+npm unpublish react-native-image-viewfinder@0.2.0
 
 # After 72 hours — mark it, and ship a fix
-npm deprecate react-native-viewfinder@0.2.0 "Broken pan on Android; use 0.2.1"
+npm deprecate react-native-image-viewfinder@0.2.0 "Broken pan on Android; use 0.2.1"
 ```
 
 ---

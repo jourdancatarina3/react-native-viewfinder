@@ -1,12 +1,12 @@
 {
-  "name": "react-native-viewfinder",
+  "name": "react-native-image-viewfinder",
   "version": "0.1.0",
   "description": "Zoom, browse and crop images in React Native. One line to start, no native code, works on Reanimated 3 & 4 and Gesture Handler 2 & 3.",
   "main": "./lib/commonjs/index.js",
   "types": "./lib/typescript/commonjs/src/index.d.ts",
   "exports": {
     ".": {
-      "react-native-viewfinder-source": "./src/index.tsx",
+      "react-native-image-viewfinder-source": "./src/index.tsx",
       "import": {
         "types": "./lib/typescript/module/src/index.d.ts",
         "default": "./lib/module/index.js"
@@ -17,7 +17,7 @@
       }
     },
     "./expo-image": {
-      "react-native-viewfinder-source": "./src/expo-image.tsx",
+      "react-native-image-viewfinder-source": "./src/expo-image.tsx",
       "import": {
         "types": "./lib/typescript/module/src/expo-image.d.ts",
         "default": "./lib/module/expo-image.js"
@@ -28,7 +28,7 @@
       }
     },
     "./expo-image-manipulator": {
-      "react-native-viewfinder-source": "./src/expo-image-manipulator.ts",
+      "react-native-image-viewfinder-source": "./src/expo-image-manipulator.ts",
       "import": {
         "types": "./lib/typescript/module/src/expo-image-manipulator.d.ts",
         "default": "./lib/module/expo-image-manipulator.js"

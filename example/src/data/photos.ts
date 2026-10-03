@@ -1,4 +1,4 @@
-import type { GalleryImage } from 'react-native-viewfinder';
+import type { GalleryImage } from 'react-native-image-viewfinder';
 
 /**
  * Fixtures for the demo screens.

@@ -172,7 +172,7 @@ two ways:
 2. **A pre-wired subpath export** for people who want no configuration at all:
 
    ```tsx
-   import { Gallery } from 'react-native-viewfinder/expo-image';
+   import { Gallery } from 'react-native-image-viewfinder/expo-image';
    ```
 
    That module statically imports `expo-image`, which is safe precisely because you only
@@ -294,9 +294,9 @@ Emitting geometry costs the caller one extra line and buys three things:
 - **It is testable.** The entire crop model is pure functions over numbers, covered by 66
   unit tests, with no image decoding anywhere in the suite.
 
-`react-native-viewfinder/expo-image-manipulator` closes the one-line gap for people who do
+`react-native-image-viewfinder/expo-image-manipulator` closes the one-line gap for people who do
 want a file, as an optional subpath import — the same pattern, and for the same Metro
-reason, as `react-native-viewfinder/expo-image` (D-009).
+reason, as `react-native-image-viewfinder/expo-image` (D-009).
 
 ---
 

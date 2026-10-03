@@ -25,7 +25,7 @@ export type Rotation = 0 | 90 | 180 | 270;
  * The operations are **order-dependent**: rotate, then flip, then crop. The
  * crop rectangle is expressed in the coordinates of the already-rotated,
  * already-flipped image, so applying them in any other order silently crops
- * the wrong region. `react-native-viewfinder/expo-image-manipulator` applies
+ * the wrong region. `react-native-image-viewfinder/expo-image-manipulator` applies
  * them correctly for you.
  */
 export type CropResult = {

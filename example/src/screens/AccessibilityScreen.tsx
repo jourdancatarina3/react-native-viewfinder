@@ -6,8 +6,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import type { ReduceMotionSetting } from 'react-native-viewfinder';
-import { Gallery } from 'react-native-viewfinder';
+import type { ReduceMotionSetting } from 'react-native-image-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 import { PHOTOS } from '../data/photos';
 
 /**

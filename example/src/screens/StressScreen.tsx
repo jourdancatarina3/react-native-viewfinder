@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { GalleryRef } from 'react-native-viewfinder';
-import { Gallery } from 'react-native-viewfinder';
+import type { GalleryRef } from 'react-native-image-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 import { STRESS } from '../data/photos';
 
 /**

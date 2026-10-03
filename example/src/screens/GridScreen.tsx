@@ -8,8 +8,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import type { GalleryImage } from 'react-native-viewfinder';
-import { Gallery } from 'react-native-viewfinder';
+import type { GalleryImage } from 'react-native-image-viewfinder';
+import { Gallery } from 'react-native-image-viewfinder';
 import { PHOTOS, thumbnailFor } from '../data/photos';
 
 /**

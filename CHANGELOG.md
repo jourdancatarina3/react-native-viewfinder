@@ -32,13 +32,13 @@ First release.
   re-centring run entirely on the UI thread. `getResult()` returns a rectangle in the
   source image's own pixels plus rotation and flip flags, in the shape native manipulators
   already accept.
-- **`react-native-viewfinder/expo-image-manipulator`** — an optional one-call helper
+- **`react-native-image-viewfinder/expo-image-manipulator`** — an optional one-call helper
   (`applyCrop`) that turns a crop result into a file, applying rotate, flip and crop in the
   correct order.
 - **Gesture Handler 2 *and* 3 support** from one install, via an internal adapter that
   picks the hook API when it exists and the builder otherwise. Reanimated 3 and 4 both
   work with no shim, which also means both React Native architectures are supported.
-- **`react-native-viewfinder/expo-image`** — a pre-wired entry point giving blurhash
+- **`react-native-image-viewfinder/expo-image`** — a pre-wired entry point giving blurhash
   placeholders and progressive decoding, for projects that have `expo-image`. Any image
   component can also be supplied through `ImageComponent`.
 - **Accessibility** — per-image screen-reader labels, a page indicator that announces
