@@ -70,7 +70,11 @@ jobs:
           - gesture-handler: '3.3.0'
             reanimated: '4.6.0'
             worklets: '0.12.2'
-            label: 'RGH 3 + Reanimated 4 (the npm latest default)'
+            label: 'RGH 3 + Reanimated 4.6'
+          - gesture-handler: '3.3.0'
+            reanimated: '4.7.1'
+            worklets: '0.13.0'
+            label: 'RGH 3 + Reanimated 4.7 (the npm latest default)'
 
     name: compat (${{ matrix.label }})
 

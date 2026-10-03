@@ -1,7 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: '@react-native/jest-preset',
-  resolver: 'react-native-worklets/jest/resolver.js',
+  resolver: '<rootDir>/jest/resolver.js',
   setupFiles: ['<rootDir>/jest/setup.js'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   testMatch: ['<rootDir>/src/**/__tests__/**/*.test.{ts,tsx}'],

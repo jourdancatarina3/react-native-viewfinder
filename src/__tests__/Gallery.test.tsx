@@ -1,9 +1,10 @@
 import type { RenderResult } from '@testing-library/react-native';
-import { act, render } from '@testing-library/react-native';
+import { act } from '@testing-library/react-native';
 import { createRef } from 'react';
 import { BackHandler, Image, Text, View } from 'react-native';
 import { Gallery } from '../components/Gallery';
 import type { GalleryRef, ImageComponentProps } from '../types';
+import { render } from './render';
 
 const PHOTOS = [
   'https://example.com/1.jpg',

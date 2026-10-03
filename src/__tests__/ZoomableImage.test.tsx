@@ -1,9 +1,10 @@
 import type { RenderResult } from '@testing-library/react-native';
-import { act, render } from '@testing-library/react-native';
+import { act } from '@testing-library/react-native';
 import { createRef } from 'react';
 import { Image, Text, View } from 'react-native';
 import { ZoomableImage } from '../components/ZoomableImage';
 import type { ImageComponentProps, ZoomableImageRef } from '../types';
+import { render } from './render';
 
 /**
  * A stand-in for whatever draws the image, so tests can drive `onLoad` and

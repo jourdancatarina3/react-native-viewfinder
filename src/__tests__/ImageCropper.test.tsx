@@ -1,9 +1,10 @@
 import type { RenderResult } from '@testing-library/react-native';
-import { act, render } from '@testing-library/react-native';
+import { act } from '@testing-library/react-native';
 import { createRef } from 'react';
 import { Image, Text, View } from 'react-native';
 import { ImageCropper } from '../components/ImageCropper';
 import type { ImageComponentProps, ImageCropperRef } from '../types';
+import { render } from './render';
 
 const SOURCE = 'https://example.com/photo.jpg';
 
