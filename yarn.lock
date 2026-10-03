@@ -11149,12 +11149,15 @@ __metadata:
     typescript: "npm:^6.0.3"
   peerDependencies:
     expo-image: "*"
+    expo-image-manipulator: "*"
     react: "*"
     react-native: "*"
     react-native-gesture-handler: ">=2.16.0 || >=3.0.0"
     react-native-reanimated: ">=3.10.0 || >=4.0.0"
   peerDependenciesMeta:
     expo-image:
+      optional: true
+    expo-image-manipulator:
       optional: true
   languageName: unknown
   linkType: soft
