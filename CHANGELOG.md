@@ -9,7 +9,7 @@ out here.
 
 Entries after `0.1.0` are generated from conventional commit messages by `release-it`.
 
-## [0.1.0] — 2026-10-03
+## [0.1.0] — 2026-10-04
 
 First release.
 
