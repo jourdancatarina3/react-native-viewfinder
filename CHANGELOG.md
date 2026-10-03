@@ -9,7 +9,7 @@ out here.
 
 Entries after `0.1.0` are generated from conventional commit messages by `release-it`.
 
-## [0.1.0] — Unreleased
+## [0.1.0] — 2026-10-03
 
 First release.
 
@@ -23,9 +23,11 @@ First release.
   a ref (`reset`, `zoomTo`, `getTransform`).
 - **`<ImageCropper>`** — a complete crop screen: aspect-ratio presets, draggable handles
   with 44pt touch targets, quarter-turn rotation, flips, a rule-of-thirds overlay that
-  appears only while you interact, and a replaceable toolbar. `getResult()` returns a
-  rectangle in the source image's own pixels plus rotation and flip flags, in the shape
-  native manipulators already accept.
+  appears only while you interact, and a replaceable toolbar. As in iOS Photos, the photo
+  stays put while you drag a handle, a handle cannot be pulled past the photo's edge, and on
+  release the frame grows back to fill the screen while the photo zooms to keep the same
+  crop. `getResult()` returns a rectangle in the source image's own pixels plus rotation
+  and flip flags, in the shape native manipulators already accept.
 - **`react-native-viewfinder/expo-image-manipulator`** — an optional one-call helper
   (`applyCrop`) that turns a crop result into a file, applying rotate, flip and crop in the
   correct order.
