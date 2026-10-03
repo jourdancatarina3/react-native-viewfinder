@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReduceMotion } from 'react-native-reanimated';
 import {
   cancelAnimation,
@@ -19,10 +19,14 @@ import type {
 } from '../core/crop';
 import {
   clampToCover,
-  cropBaseSize,
+  cropImageSize,
   cropRectFromTransform,
   cropTranslationBounds,
+  frameCentreOffset,
   frameForAspect,
+  imageRect,
+  intersectRects,
+  maximizeFrame,
   minScaleToCover,
   nextRotation,
   resizeFrame,
@@ -30,7 +34,7 @@ import {
   rotatedSize,
 } from '../core/crop';
 import { withRubberBand } from '../core/pan';
-import type { Size } from '../core/types';
+import type { Size, Transform } from '../core/types';
 import { scaleAround, toCentreRelative } from '../core/zoom';
 import { useStableCallback } from './useStableCallback';
 
@@ -41,9 +45,9 @@ export type UseCropperOptions = {
   sourceSize: Size | null;
   /** Locked ratio, `'free'`, or `'original'`. */
   aspectRatio: AspectRatio;
-  /** Gap between the crop frame and the container edge. */
+  /** Gap between the stage's edge and the image at rest. */
   framePadding: number;
-  /** Largest zoom, relative to the frame-covering size. */
+  /** Largest zoom, relative to the fitted size. */
   maxScale: number;
   /** Smallest the frame can be dragged to, per axis. */
   minFrameSize: number;
@@ -59,10 +63,12 @@ export type UseCropperResult = {
   animatedStyle: ReturnType<typeof useAnimatedStyle>;
   /** Style applying the current rotation and flip to the image. */
   orientationStyle: ReturnType<typeof useAnimatedStyle>;
-  /** The image's size at scale 1, covering the frame. */
+  /** The image's size at scale 1, fitted to the stage. */
   baseSize: Size;
   /** The crop frame, in container coordinates. */
   frame: Rect;
+  /** The ratio currently in effect, which the prop only seeds. */
+  aspectRatio: AspectRatio;
   /** True while a gesture is in progress; drives the grid overlay. */
   interacting: ReturnType<typeof useSharedValue<boolean>>;
   rotation: Rotation;
@@ -72,7 +78,7 @@ export type UseCropperResult = {
   beginFrameDrag: () => void;
   /** Moves a handle. `delta` is measured from the drag's start. */
   dragFrame: (handle: CropHandle, delta: { x: number; y: number }) => void;
-  /** Ends a handle drag and settles the image back over the new frame. */
+  /** Ends a handle drag and expands the frame back out over the image. */
   endFrameDrag: () => void;
   rotate: (turns?: number) => void;
   flip: (axis: 'horizontal' | 'vertical') => void;
@@ -83,19 +89,20 @@ export type UseCropperResult = {
   getResult: () => CropResult | null;
 };
 
-const EMPTY_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 };
+const IDENTITY: Transform = { scale: 1, translateX: 0, translateY: 0 };
 
 /**
  * The crop engine.
  *
- * The model is the one the phone photo editors use, and it is chosen because it
- * removes a whole class of confusing states: the image *covers* the frame at
- * scale 1, so it can only ever be zoomed further in. There is no way to leave a
- * gap inside the crop, and therefore no need to decide what a gap would mean.
+ * The image is fitted to the stage and can be pinched and panned about the
+ * stage's centre; the frame is an independent rectangle laid over it. The only
+ * rule connecting them is that the frame must stay inside the image, which is
+ * enforced by moving the image, never by resizing it.
  *
- * Everything the user does — pinching, panning, dragging a handle, changing the
- * ratio, rotating — ends by re-clamping the image so the frame is still
- * covered.
+ * Letting go of a handle then does what iOS does: the frame expands back out
+ * to the largest rectangle of that shape the stage can hold, and the image
+ * zooms and slides underneath so that exactly the same crop stays inside it.
+ * See `maximizeFrame` for why that leaves the reported rectangle unchanged.
  */
 export function useCropper(options: UseCropperOptions): UseCropperResult {
   const {
@@ -113,11 +120,9 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   const [flipHorizontal, setFlipHorizontal] = useState(false);
   const [flipVertical, setFlipVertical] = useState(false);
   const [aspect, setAspect] = useState<AspectRatio>(aspectRatio);
-  const [frameOverride, setFrameOverride] = useState<Rect | null>(null);
 
   useEffect(() => {
     setAspect(aspectRatio);
-    setFrameOverride(null);
   }, [aspectRatio]);
 
   /** The image's dimensions as displayed, after any quarter turn. */
@@ -133,49 +138,15 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   );
 
   /**
-   * The ratio the frame *starts* at, which is not always the one it is locked
-   * to.
-   *
-   * For a free crop the frame begins around the whole image rather than filling
-   * the stage. Filling the stage is what the maths falls out to, but it means
-   * opening a cropper on a landscape photo in a portrait app silently proposes
-   * throwing half the photo away — and a crop screen that discards data before
-   * the user touches anything is a bad crop screen. Starting at the image's own
-   * shape shows everything, and the handles are still free to go anywhere.
+   * The image's laid-out size. Depends only on the stage, so dragging a handle
+   * never resizes the picture.
    */
-  const initialFrameRatio = useMemo(() => {
-    if (aspect !== 'free') {
-      return lockedRatio;
-    }
-    return displaySize && displaySize.height > 0
-      ? displaySize.width / displaySize.height
-      : null;
-  }, [aspect, lockedRatio, displaySize]);
-
-  /** The area a dragged frame must stay inside. */
-  const frameBounds = useMemo(
-    (): Rect => ({
-      x: framePadding,
-      y: framePadding,
-      width: Math.max(0, containerSize.width - framePadding * 2),
-      height: Math.max(0, containerSize.height - framePadding * 2),
-    }),
-    [containerSize, framePadding]
-  );
-
-  const defaultFrame = useMemo(
-    () => frameForAspect(containerSize, initialFrameRatio, framePadding),
-    [containerSize, initialFrameRatio, framePadding]
-  );
-
-  const frame = frameOverride ?? defaultFrame;
-
   const baseSize = useMemo(
     () =>
-      displaySize && frame.width > 0
-        ? cropBaseSize(displaySize, frame)
+      displaySize
+        ? cropImageSize(displaySize, containerSize, framePadding)
         : { width: 0, height: 0 },
-    [displaySize, frame]
+    [displaySize, containerSize, framePadding]
   );
 
   const scale = useSharedValue(1);
@@ -183,8 +154,63 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   const translateY = useSharedValue(0);
   const startScale = useSharedValue(1);
   const startX = useSharedValue(0);
-  const startY = useSharedValue(0);
+  const translateStartY = useSharedValue(0);
   const interacting = useSharedValue(false);
+
+  /**
+   * The frame's resting shape for a given ratio: the largest rectangle of that
+   * ratio the stage can hold, or — for a free crop — exactly the image.
+   *
+   * A free crop starting around the whole image matters: filling the stage
+   * instead would propose discarding a third of a landscape photo in a
+   * portrait app before the user has touched anything.
+   */
+  const restingFrame = useCallback(
+    (ratio: number | null, size: Size): Rect => {
+      if (size.width <= 0) {
+        return { x: 0, y: 0, width: 0, height: 0 };
+      }
+      return ratio !== null
+        ? frameForAspect(containerSize, ratio, framePadding)
+        : imageRect(size, containerSize, IDENTITY);
+    },
+    [containerSize, framePadding]
+  );
+
+  const [frame, setFrame] = useState<Rect>({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
+
+  /**
+   * Snaps the frame when a ratio is chosen, and when the stage is re-measured.
+   *
+   * Choosing *Freeform* deliberately does **not** snap: it unlocks the handles
+   * and keeps whatever you had framed, which is what iOS does and what people
+   * expect — switching to Freeform to nudge one edge should not throw the
+   * crop away. Only a real layout change re-derives a free frame.
+   */
+  const lastRatioRef = useRef<number | null | undefined>(undefined);
+  const lastGeometryRef = useRef('');
+
+  useEffect(() => {
+    if (baseSize.width <= 0) {
+      return;
+    }
+    const geometry = `${baseSize.width}x${baseSize.height}`;
+    const geometryChanged = geometry !== lastGeometryRef.current;
+    const ratioChanged = lockedRatio !== lastRatioRef.current;
+    lastGeometryRef.current = geometry;
+    lastRatioRef.current = lockedRatio;
+
+    if (lockedRatio !== null && (ratioChanged || geometryChanged)) {
+      setFrame(restingFrame(lockedRatio, baseSize));
+    } else if (lockedRatio === null && geometryChanged) {
+      setFrame(restingFrame(null, baseSize));
+    }
+  }, [baseSize, lockedRatio, restingFrame]);
 
   // Mirrors for the worklets.
   const base = useSharedValue<Size>(baseSize);
@@ -202,8 +228,11 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     container.value = containerSize;
   }, [container, containerSize]);
   useEffect(() => {
-    limits.value = { min: 1, max: maxScale };
-  }, [limits, maxScale]);
+    limits.value = {
+      min: baseSize.width > 0 ? minScaleToCover(baseSize, frame) : 1,
+      max: maxScale,
+    };
+  }, [limits, baseSize, frame, maxScale]);
 
   const timing = useMemo(
     () => ({ duration: TIMING_DURATION, reduceMotion }),
@@ -228,6 +257,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
         },
         baseSize,
         frame,
+        containerSize,
         displaySize
       ),
       sourceSize,
@@ -237,6 +267,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     displaySize,
     baseSize,
     frame,
+    containerSize,
     rotation,
     flipHorizontal,
     flipVertical,
@@ -254,18 +285,17 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   }, [getResult, emitCropChange]);
 
   /**
-   * Re-covers the frame after it changes shape underneath the image.
+   * Settles the image so it covers the frame, wherever the frame now is.
    *
-   * Changing the ratio, dragging a handle or rotating can all leave the image
-   * too small or off-centre for the new frame. Scaling back out to
-   * `minScaleToCover` before clamping is what stops a gap appearing.
+   * Used after a pinch or a pan, and after the ratio changes — anything that
+   * can leave the frame partly off the picture.
    */
   const settle = useCallback(
-    (animated = true) => {
-      if (baseSize.width === 0 || frame.width === 0) {
+    (nextFrame: Rect = frame, animated = true) => {
+      if (baseSize.width === 0 || nextFrame.width === 0) {
         return;
       }
-      const required = minScaleToCover(baseSize, frame);
+      const required = minScaleToCover(baseSize, nextFrame);
       const target = clampToCover(
         {
           scale: Math.max(scale.value, required),
@@ -273,7 +303,8 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
           translateY: translateY.value,
         },
         baseSize,
-        frame,
+        nextFrame,
+        containerSize,
         required,
         Math.max(maxScale, required)
       );
@@ -292,12 +323,22 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
         report();
       }
     },
-    [baseSize, frame, maxScale, scale, translateX, translateY, timing, report]
+    [
+      frame,
+      baseSize,
+      containerSize,
+      maxScale,
+      scale,
+      translateX,
+      translateY,
+      timing,
+      report,
+    ]
   );
 
-  // Re-settle whenever the geometry changes out from under the transform.
+  // Re-settle when the geometry changes out from under the transform.
   useEffect(() => {
-    settle(false);
+    settle(frame, false);
     // Keyed on geometry only: this must not re-run because the transform moved.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseSize, frame]);
@@ -322,7 +363,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
       cancelAnimation(translateY);
       startScale.value = scale.value;
       startX.value = translateX.value;
-      startY.value = translateY.value;
+      translateStartY.value = translateY.value;
     },
     onUpdate: (event: PinchEvent) => {
       'worklet';
@@ -344,7 +385,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
         {
           scale: startScale.value,
           translateX: startX.value,
-          translateY: startY.value,
+          translateY: translateStartY.value,
         },
         bounded,
         focal
@@ -356,7 +397,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     onEnd: () => {
       'worklet';
       interacting.value = false;
-      runOnJS(settle)(true);
+      runOnJS(settle)(frameValue.value, true);
     },
   });
 
@@ -369,7 +410,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
       cancelAnimation(translateX);
       cancelAnimation(translateY);
       startX.value = translateX.value;
-      startY.value = translateY.value;
+      translateStartY.value = translateY.value;
     },
     onUpdate: (event: PanEvent) => {
       'worklet';
@@ -378,38 +419,45 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
         frameValue.value,
         scale.value
       );
-      translateX.value = withRubberBand(
-        startX.value + event.translationX,
-        bounds.x,
-        container.value.width,
-        RUBBER_BAND_COEFFICIENT
-      );
-      translateY.value = withRubberBand(
-        startY.value + event.translationY,
-        bounds.y,
-        container.value.height,
-        RUBBER_BAND_COEFFICIENT
-      );
+      const centre = frameCentreOffset(frameValue.value, container.value);
+      // Rubber-band about the frame's centre, which is where the limits sit.
+      translateX.value =
+        centre.x +
+        withRubberBand(
+          startX.value + event.translationX - centre.x,
+          bounds.x,
+          container.value.width,
+          RUBBER_BAND_COEFFICIENT
+        );
+      translateY.value =
+        centre.y +
+        withRubberBand(
+          translateStartY.value + event.translationY - centre.y,
+          bounds.y,
+          container.value.height,
+          RUBBER_BAND_COEFFICIENT
+        );
     },
     onEnd: () => {
       'worklet';
       interacting.value = false;
-      runOnJS(settle)(true);
+      runOnJS(settle)(frameValue.value, true);
     },
   });
 
-  // A double-tap toggles between fitting the frame and a 2x look, which is the
-  // quickest way to check detail without a two-finger gesture.
+  // A double-tap toggles between filling the frame and a closer look, which is
+  // the quickest way to check detail without a two-finger gesture.
   const doubleTap = useTap({
     numberOfTaps: 2,
     maxDistance: 40,
     onEnd: () => {
       'worklet';
       const { min, max } = limits.value;
-      const target = scale.value > min + 0.01 ? min : Math.min(2, max);
+      const target = scale.value > min + 0.01 ? min : Math.min(min * 2, max);
+      const centre = frameCentreOffset(frameValue.value, container.value);
       scale.value = withTiming(target, timing);
-      translateX.value = withTiming(0, timing);
-      translateY.value = withTiming(0, timing, () => {
+      translateX.value = withTiming(centre.x, timing);
+      translateY.value = withTiming(centre.y, timing, () => {
         'worklet';
         runOnJS(report)();
       });
@@ -420,44 +468,101 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
 
   // --- Frame handles -------------------------------------------------------
 
-  const [dragStartFrame, setDragStartFrame] = useState<Rect | null>(null);
+  /**
+   * The frame as it was when the drag began.
+   *
+   * A ref, not state: handle deltas are cumulative from the gesture's start, so
+   * if the origin lagged a render behind, each update would apply the whole
+   * delta to an already-moved frame and the drag would run away.
+   */
+  const dragOriginRef = useRef<Rect | null>(null);
+
+  /** Handles may not be pulled out past the photo, as in iOS. */
+  const handleBounds = useCallback((): Rect => {
+    const drawn = imageRect(baseSize, containerSize, {
+      scale: scale.value,
+      translateX: translateX.value,
+      translateY: translateY.value,
+    });
+    return intersectRects(drawn, {
+      x: framePadding,
+      y: framePadding,
+      width: Math.max(0, containerSize.width - framePadding * 2),
+      height: Math.max(0, containerSize.height - framePadding * 2),
+    });
+  }, [baseSize, containerSize, framePadding, scale, translateX, translateY]);
 
   const beginFrameDrag = useCallback(() => {
-    setDragStartFrame(frame);
+    dragOriginRef.current = frame;
     interacting.value = true;
-  }, [frame, interacting]);
+    cancelAnimation(scale);
+    cancelAnimation(translateX);
+    cancelAnimation(translateY);
+  }, [frame, interacting, scale, translateX, translateY]);
 
   const dragFrame = useCallback(
     (handle: CropHandle, delta: { x: number; y: number }) => {
-      const origin = dragStartFrame ?? frame;
-      setFrameOverride(
+      const origin = dragOriginRef.current ?? frame;
+      setFrame(
         resizeFrame(
           origin,
           handle,
           delta,
-          frameBounds,
+          handleBounds(),
           lockedRatio,
           minFrameSize
         )
       );
     },
-    [dragStartFrame, frame, frameBounds, lockedRatio, minFrameSize]
+    [frame, handleBounds, lockedRatio, minFrameSize]
   );
 
+  /**
+   * Expands the frame back out over the image, iOS-style.
+   *
+   * The frame animating out while the picture zooms in under it is what turns
+   * a dragged rectangle into a finished crop. `maximizeFrame` derives the pair
+   * so the framed region is provably identical either side of the animation.
+   */
   const endFrameDrag = useCallback(() => {
-    setDragStartFrame(null);
+    dragOriginRef.current = null;
     interacting.value = false;
-    settle(true);
-  }, [interacting, settle]);
+
+    if (baseSize.width === 0 || frame.width === 0) {
+      return;
+    }
+
+    const current: Transform = {
+      scale: scale.value,
+      translateX: translateX.value,
+      translateY: translateY.value,
+    };
+    const next = maximizeFrame(frame, current, containerSize, framePadding);
+
+    setFrame(next.frame);
+    scale.value = withTiming(next.transform.scale, timing);
+    translateX.value = withTiming(next.transform.translateX, timing);
+    translateY.value = withTiming(next.transform.translateY, timing, () => {
+      'worklet';
+      runOnJS(report)();
+    });
+  }, [
+    frame,
+    baseSize,
+    containerSize,
+    framePadding,
+    interacting,
+    scale,
+    translateX,
+    translateY,
+    timing,
+    report,
+  ]);
 
   // --- Commands ------------------------------------------------------------
 
   const rotate = useCallback((turns = 1) => {
     setRotation((current) => nextRotation(current, turns));
-    // A quarter turn changes which axis is constrained, so any hand-dragged
-    // frame no longer means what it did. Returning to the default for the
-    // ratio is both simpler to reason about and what the phone editors do.
-    setFrameOverride(null);
   }, []);
 
   const flip = useCallback((axis: 'horizontal' | 'vertical') => {
@@ -470,7 +575,6 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
 
   const setAspectRatio = useCallback((next: AspectRatio) => {
     setAspect(next);
-    setFrameOverride(null);
   }, []);
 
   const reset = useCallback(() => {
@@ -478,14 +582,36 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     setFlipHorizontal(false);
     setFlipVertical(false);
     setAspect(aspectRatio);
-    setFrameOverride(null);
+
+    // Derive the frame from the *target* state rather than the current one.
+    // Reading the memoised frame here would use the ratio being reset away
+    // from, because `setAspect` has not committed yet.
+    const restSize = sourceSize
+      ? cropImageSize(sourceSize, containerSize, framePadding)
+      : baseSize;
+    const restRatio = resolveAspectRatio(aspectRatio, sourceSize);
+    lastRatioRef.current = restRatio;
+    lastGeometryRef.current = `${restSize.width}x${restSize.height}`;
+    setFrame(restingFrame(restRatio, restSize));
+
     cancelAnimation(scale);
     cancelAnimation(translateX);
     cancelAnimation(translateY);
     scale.value = withTiming(1, timing);
     translateX.value = withTiming(0, timing);
     translateY.value = withTiming(0, timing);
-  }, [aspectRatio, scale, translateX, translateY, timing]);
+  }, [
+    aspectRatio,
+    sourceSize,
+    baseSize,
+    containerSize,
+    framePadding,
+    restingFrame,
+    scale,
+    translateX,
+    translateY,
+    timing,
+  ]);
 
   // Report once the geometry is first known, so consumers have a result before
   // the user touches anything.
@@ -493,7 +619,7 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     if (baseSize.width > 0) {
       report();
     }
-  }, [baseSize.width, rotation, flipHorizontal, flipVertical, report]);
+  }, [baseSize.width, frame, rotation, flipHorizontal, flipVertical, report]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -519,7 +645,8 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
     animatedStyle,
     orientationStyle,
     baseSize,
-    frame: frame ?? EMPTY_RECT,
+    frame,
+    aspectRatio: aspect,
     interacting,
     rotation,
     flipHorizontal,

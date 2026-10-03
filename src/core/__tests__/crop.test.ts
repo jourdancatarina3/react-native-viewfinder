@@ -1,11 +1,15 @@
 import {
   ASPECT_PRESETS,
   clampToCover,
-  cropBaseSize,
+  cropImageSize,
   cropRectFromTransform,
   cropTranslationBounds,
+  frameCentreOffset,
   frameForAspect,
+  imageRect,
+  intersectRects,
   isFullFrame,
+  maximizeFrame,
   minScaleToCover,
   nextRotation,
   resizeFrame,
@@ -15,11 +19,144 @@ import {
 import type { Rect } from '../crop';
 import type { Size, Transform } from '../types';
 
-const CONTAINER: Size = { width: 400, height: 800 };
+const STAGE: Size = { width: 400, height: 700 };
+const PAD = 20;
 const SQUARE: Size = { width: 1000, height: 1000 };
 const LANDSCAPE: Size = { width: 1600, height: 900 };
 
 const identity: Transform = { scale: 1, translateX: 0, translateY: 0 };
+
+/** The starting state for a free crop: image fitted, frame around it. */
+function freeSetup(source: Size, stage: Size = STAGE) {
+  const baseSize = cropImageSize(source, stage, PAD);
+  const frame = imageRect(baseSize, stage, identity);
+  return { baseSize, frame };
+}
+
+describe('cropImageSize', () => {
+  it('fits the image inside the padded stage', () => {
+    // 1600x900 into 360x660 -> limited by width
+    const size = cropImageSize(LANDSCAPE, STAGE, PAD);
+    expect(size.width).toBeCloseTo(360, 5);
+    expect(size.height).toBeCloseTo(202.5, 5);
+  });
+
+  it('does not depend on the crop frame at all', () => {
+    // The whole point of the model: the image's layout is a function of the
+    // stage only, so dragging a handle can never resize the picture.
+    expect(cropImageSize(LANDSCAPE, STAGE, PAD)).toEqual(
+      cropImageSize(LANDSCAPE, STAGE, PAD)
+    );
+  });
+
+  it('never exceeds the padded stage on either axis', () => {
+    for (const source of [
+      SQUARE,
+      LANDSCAPE,
+      { width: 900, height: 1600 },
+      { width: 4000, height: 800 },
+      { width: 1, height: 1 },
+    ]) {
+      const size = cropImageSize(source, STAGE, PAD);
+      expect(size.width).toBeLessThanOrEqual(STAGE.width - PAD * 2 + 1e-9);
+      expect(size.height).toBeLessThanOrEqual(STAGE.height - PAD * 2 + 1e-9);
+    }
+  });
+
+  it('returns a zero size for an unmeasured stage', () => {
+    expect(cropImageSize(SQUARE, { width: 0, height: 0 }, PAD)).toEqual({
+      width: 0,
+      height: 0,
+    });
+  });
+});
+
+describe('imageRect', () => {
+  it('is centred in the stage at the identity transform', () => {
+    const base = cropImageSize(LANDSCAPE, STAGE, PAD);
+    const rect = imageRect(base, STAGE, identity);
+    expect(rect.x + rect.width / 2).toBeCloseTo(STAGE.width / 2, 6);
+    expect(rect.y + rect.height / 2).toBeCloseTo(STAGE.height / 2, 6);
+    expect(rect.width).toBeCloseTo(base.width, 6);
+  });
+
+  it('grows with scale and moves with translation', () => {
+    const base = { width: 200, height: 100 };
+    const rect = imageRect(base, STAGE, {
+      scale: 2,
+      translateX: 30,
+      translateY: -10,
+    });
+    expect(rect.width).toBe(400);
+    expect(rect.height).toBe(200);
+    expect(rect.x).toBeCloseTo(400 / 2 + 30 - 200, 6);
+    expect(rect.y).toBeCloseTo(700 / 2 - 10 - 100, 6);
+  });
+
+  it('returns a zero rect for unusable input', () => {
+    expect(imageRect({ width: 0, height: 0 }, STAGE, identity)).toEqual({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    });
+  });
+});
+
+describe('intersectRects', () => {
+  it('returns the overlap', () => {
+    expect(
+      intersectRects(
+        { x: 0, y: 0, width: 100, height: 100 },
+        { x: 50, y: 50, width: 100, height: 100 }
+      )
+    ).toEqual({ x: 50, y: 50, width: 50, height: 50 });
+  });
+
+  it('returns a zero rect when they do not overlap', () => {
+    const none = intersectRects(
+      { x: 0, y: 0, width: 10, height: 10 },
+      { x: 100, y: 100, width: 10, height: 10 }
+    );
+    expect(none.width).toBe(0);
+    expect(none.height).toBe(0);
+  });
+
+  it('returns the inner rect when one contains the other', () => {
+    expect(
+      intersectRects(
+        { x: 0, y: 0, width: 100, height: 100 },
+        { x: 10, y: 10, width: 20, height: 20 }
+      )
+    ).toEqual({ x: 10, y: 10, width: 20, height: 20 });
+  });
+});
+
+describe('frameCentreOffset', () => {
+  it('is zero for a centred frame', () => {
+    expect(
+      frameCentreOffset({ x: 100, y: 250, width: 200, height: 200 }, STAGE)
+    ).toEqual({ x: 0, y: 0 });
+  });
+
+  it('is positive when the frame sits right of or below centre', () => {
+    const offset = frameCentreOffset(
+      { x: 200, y: 400, width: 100, height: 100 },
+      STAGE
+    );
+    expect(offset.x).toBeGreaterThan(0);
+    expect(offset.y).toBeGreaterThan(0);
+  });
+
+  it('returns the origin for an unmeasured stage', () => {
+    expect(
+      frameCentreOffset(
+        { x: 0, y: 0, width: 10, height: 10 },
+        { width: 0, height: 0 }
+      )
+    ).toEqual({ x: 0, y: 0 });
+  });
+});
 
 describe('resolveAspectRatio', () => {
   it('returns null for free', () => {
@@ -47,54 +184,45 @@ describe('resolveAspectRatio', () => {
 });
 
 describe('frameForAspect', () => {
-  it('fills the padded container when the ratio is free', () => {
-    expect(frameForAspect(CONTAINER, null, 20)).toEqual({
+  it('fills the padded stage when the ratio is free', () => {
+    expect(frameForAspect(STAGE, null, PAD)).toEqual({
       x: 20,
       y: 20,
       width: 360,
-      height: 760,
+      height: 660,
     });
   });
 
   it('produces a square frame for 1:1, centred', () => {
-    const frame = frameForAspect(CONTAINER, 1, 20);
+    const frame = frameForAspect(STAGE, 1, PAD);
     expect(frame.width).toBe(360);
     expect(frame.height).toBe(360);
-    expect(frame.x).toBe(20);
-    expect(frame.y).toBe((800 - 360) / 2);
+    expect(frame.x + frame.width / 2).toBeCloseTo(STAGE.width / 2, 6);
+    expect(frame.y + frame.height / 2).toBeCloseTo(STAGE.height / 2, 6);
   });
 
-  it('constrains on height when the ratio is very wide', () => {
-    // A 16:9 frame in a 400x800 container is limited by width, not height.
-    const frame = frameForAspect(CONTAINER, 16 / 9, 0);
+  it('constrains on width for a wide ratio', () => {
+    const frame = frameForAspect(STAGE, 16 / 9, 0);
     expect(frame.width).toBe(400);
     expect(frame.height).toBeCloseTo(225, 5);
   });
 
-  it('constrains on width when the ratio is very tall', () => {
+  it('constrains on height for a tall ratio', () => {
     const frame = frameForAspect({ width: 800, height: 400 }, 1 / 4, 0);
     expect(frame.height).toBe(400);
     expect(frame.width).toBe(100);
   });
 
-  it('never exceeds the padded container', () => {
+  it('never exceeds the padded stage', () => {
     for (const ratio of [0.25, 0.5, 1, 1.5, 2, 4, 16 / 9]) {
-      const frame = frameForAspect(CONTAINER, ratio, 16);
+      const frame = frameForAspect(STAGE, ratio, 16);
       expect(frame.width).toBeLessThanOrEqual(400 - 32 + 1e-9);
-      expect(frame.height).toBeLessThanOrEqual(800 - 32 + 1e-9);
+      expect(frame.height).toBeLessThanOrEqual(700 - 32 + 1e-9);
     }
   });
 
-  it('is always centred', () => {
-    for (const ratio of [0.5, 1, 2]) {
-      const frame = frameForAspect(CONTAINER, ratio, 10);
-      expect(frame.x + frame.width / 2).toBeCloseTo(CONTAINER.width / 2, 6);
-      expect(frame.y + frame.height / 2).toBeCloseTo(CONTAINER.height / 2, 6);
-    }
-  });
-
-  it('returns an empty rect for an unmeasured container', () => {
-    expect(frameForAspect({ width: 0, height: 0 }, 1, 10)).toEqual({
+  it('returns an empty rect for an unmeasured stage', () => {
+    expect(frameForAspect({ width: 0, height: 0 }, 1, PAD)).toEqual({
       x: 0,
       y: 0,
       width: 0,
@@ -102,58 +230,36 @@ describe('frameForAspect', () => {
     });
   });
 
-  it('survives padding larger than the container', () => {
-    const frame = frameForAspect(CONTAINER, 1, 9999);
+  it('survives padding larger than the stage', () => {
+    const frame = frameForAspect(STAGE, 1, 9999);
     expect(frame.width).toBeGreaterThanOrEqual(0);
     expect(frame.height).toBeGreaterThanOrEqual(0);
   });
 });
 
-describe('cropBaseSize', () => {
-  it('covers the frame exactly on the constrained axis', () => {
-    const frame: Rect = { x: 0, y: 0, width: 300, height: 300 };
-    const base = cropBaseSize(LANDSCAPE, frame);
-    expect(base.height).toBeCloseTo(300, 6);
-    expect(base.width).toBeGreaterThanOrEqual(300);
-  });
-
-  it('never leaves a gap on either axis', () => {
-    const frame: Rect = { x: 0, y: 0, width: 360, height: 200 };
-    for (const source of [
-      SQUARE,
-      LANDSCAPE,
-      { width: 900, height: 1600 },
-      { width: 4000, height: 800 },
-    ]) {
-      const base = cropBaseSize(source, frame);
-      expect(base.width).toBeGreaterThanOrEqual(frame.width - 1e-9);
-      expect(base.height).toBeGreaterThanOrEqual(frame.height - 1e-9);
-    }
-  });
-});
-
 describe('cropTranslationBounds', () => {
-  const frame: Rect = { x: 0, y: 0, width: 300, height: 300 };
+  const frame: Rect = { x: 50, y: 200, width: 300, height: 300 };
 
   it('is zero on an axis where the image exactly covers the frame', () => {
-    const base = { width: 300, height: 300 };
-    expect(cropTranslationBounds(base, frame, 1)).toEqual({ x: 0, y: 0 });
+    expect(
+      cropTranslationBounds({ width: 300, height: 300 }, frame, 1)
+    ).toEqual({ x: 0, y: 0 });
   });
 
   it('allows movement on an axis with overhang', () => {
-    const base = { width: 500, height: 300 };
-    expect(cropTranslationBounds(base, frame, 1).x).toBe(100);
-    expect(cropTranslationBounds(base, frame, 1).y).toBe(0);
+    const bounds = cropTranslationBounds({ width: 500, height: 300 }, frame, 1);
+    expect(bounds.x).toBe(100);
+    expect(bounds.y).toBe(0);
   });
 
   it('grows with scale', () => {
-    const base = { width: 300, height: 300 };
-    expect(cropTranslationBounds(base, frame, 2).x).toBe(150);
+    expect(cropTranslationBounds({ width: 300, height: 300 }, frame, 2).x).toBe(
+      150
+    );
   });
 
   it('never returns a negative bound', () => {
-    const base = { width: 100, height: 100 };
-    const bounds = cropTranslationBounds(base, frame, 1);
+    const bounds = cropTranslationBounds({ width: 100, height: 100 }, frame, 1);
     expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.y).toBeGreaterThanOrEqual(0);
   });
@@ -168,31 +274,38 @@ describe('cropTranslationBounds', () => {
     ).toEqual({ x: 0, y: 0 });
     expect(
       cropTranslationBounds({ width: 300, height: 300 }, frame, NaN)
-    ).toEqual({
-      x: 0,
-      y: 0,
-    });
+    ).toEqual({ x: 0, y: 0 });
   });
 });
 
 describe('minScaleToCover', () => {
-  it('is 1 when the image already covers the frame', () => {
+  it('is 1 when the image exactly covers the frame', () => {
     expect(
       minScaleToCover(
-        { width: 400, height: 400 },
+        { width: 300, height: 300 },
         { x: 0, y: 0, width: 300, height: 300 }
       )
-    ).toBe(1);
+    ).toBeCloseTo(1, 10);
   });
 
-  it('is above 1 when the frame has outgrown the image', () => {
-    // A frame widened from 1:1 to 16:9 can be wider than the laid-out image.
+  it('is above 1 when the frame is larger than the image', () => {
     expect(
       minScaleToCover(
         { width: 300, height: 300 },
         { x: 0, y: 0, width: 450, height: 300 }
       )
     ).toBeCloseTo(1.5, 6);
+  });
+
+  it('drops below 1 when the frame has been dragged smaller than the image', () => {
+    // Not floored at 1: with a small frame, zooming out past the fitted size
+    // still leaves the frame covered, so it is a legitimate state.
+    expect(
+      minScaleToCover(
+        { width: 300, height: 300 },
+        { x: 0, y: 0, width: 150, height: 150 }
+      )
+    ).toBeCloseTo(0.5, 6);
   });
 
   it('takes the larger of the two axes', () => {
@@ -215,59 +328,91 @@ describe('minScaleToCover', () => {
 });
 
 describe('clampToCover', () => {
-  const frame: Rect = { x: 0, y: 0, width: 300, height: 300 };
   const base = { width: 500, height: 300 };
+  const centred: Rect = { x: 50, y: 200, width: 300, height: 300 };
 
-  it('leaves a centred transform alone', () => {
-    expect(clampToCover(identity, base, frame, 1, 6)).toEqual(identity);
+  it('leaves a covering transform alone', () => {
+    const settled = clampToCover(
+      { scale: 1, translateX: 0, translateY: 0 },
+      base,
+      centred,
+      STAGE,
+      1,
+      6
+    );
+    expect(settled.translateX).toBe(0);
   });
 
   it('pulls the image back so the frame stays covered', () => {
     const drifted: Transform = { scale: 1, translateX: 9999, translateY: 0 };
-    expect(clampToCover(drifted, base, frame, 1, 6).translateX).toBe(100);
+    expect(clampToCover(drifted, base, centred, STAGE, 1, 6).translateX).toBe(
+      100
+    );
   });
 
-  it('recentres an axis with no overhang', () => {
-    const drifted: Transform = { scale: 1, translateX: 0, translateY: 50 };
-    expect(clampToCover(drifted, base, frame, 1, 6).translateY).toBe(0);
+  it('clamps around the frame centre, not the stage centre', () => {
+    // An off-centre frame shifts the whole allowed range with it. Clamping
+    // around the stage centre instead is what made a dragged frame report a
+    // crop that never changed.
+    const offset: Rect = { x: 250, y: 200, width: 100, height: 100 };
+    const centre = frameCentreOffset(offset, STAGE);
+    const clamped = clampToCover(
+      { scale: 1, translateX: 0, translateY: 0 },
+      { width: 120, height: 120 },
+      offset,
+      STAGE,
+      1,
+      6
+    );
+    const bounds = cropTranslationBounds(
+      { width: 120, height: 120 },
+      offset,
+      1
+    );
+    expect(clamped.translateX).toBeCloseTo(centre.x - bounds.x, 6);
   });
 
   it('clamps scale before computing bounds', () => {
     const overshot: Transform = { scale: 99, translateX: 99999, translateY: 0 };
-    const clamped = clampToCover(overshot, base, frame, 1, 4);
+    const clamped = clampToCover(overshot, base, centred, STAGE, 1, 4);
     expect(clamped.scale).toBe(4);
-    expect(clamped.translateX).toBe(cropTranslationBounds(base, frame, 4).x);
+    expect(clamped.translateX).toBeCloseTo(
+      cropTranslationBounds(base, centred, 4).x,
+      6
+    );
   });
 
   it('is a fixed point of itself', () => {
     const once = clampToCover(
       { scale: 3, translateX: 5000, translateY: -5000 },
       base,
-      frame,
+      centred,
+      STAGE,
       1,
       6
     );
-    expect(clampToCover(once, base, frame, 1, 6)).toEqual(once);
+    expect(clampToCover(once, base, centred, STAGE, 1, 6)).toEqual(once);
   });
 });
 
 describe('cropRectFromTransform', () => {
-  const frame: Rect = { x: 50, y: 250, width: 300, height: 300 };
-
-  it('returns the whole image when untransformed and exactly covering', () => {
-    const base = cropBaseSize(SQUARE, frame); // 300x300
-    expect(cropRectFromTransform(identity, base, frame, SQUARE)).toEqual({
+  it('returns the whole image for a free crop at rest', () => {
+    const { baseSize, frame } = freeSetup(LANDSCAPE);
+    expect(
+      cropRectFromTransform(identity, baseSize, frame, STAGE, LANDSCAPE)
+    ).toEqual({
       originX: 0,
       originY: 0,
-      width: 1000,
-      height: 1000,
+      width: 1600,
+      height: 900,
     });
   });
 
   it('returns the centre half at 2x zoom', () => {
-    const base = cropBaseSize(SQUARE, frame);
+    const base = { width: 300, height: 300 };
+    const frame: Rect = { x: 50, y: 200, width: 300, height: 300 };
     const zoomed: Transform = { scale: 2, translateX: 0, translateY: 0 };
-    expect(cropRectFromTransform(zoomed, base, frame, SQUARE)).toEqual({
+    expect(cropRectFromTransform(zoomed, base, frame, STAGE, SQUARE)).toEqual({
       originX: 250,
       originY: 250,
       width: 500,
@@ -275,32 +420,63 @@ describe('cropRectFromTransform', () => {
     });
   });
 
-  it('moves the crop window opposite to the pan', () => {
-    const base = cropBaseSize(SQUARE, frame);
-    // Dragging the image right reveals the part of it further left.
-    const panned: Transform = { scale: 2, translateX: 50, translateY: 0 };
-    const rect = cropRectFromTransform(panned, base, frame, SQUARE);
-    expect(rect.originX).toBeLessThan(250);
+  it('accounts for a frame that is not centred in the stage', () => {
+    // This is the bug that made free cropping useless: with the frame moved,
+    // the reported rectangle did not move with it.
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const full = imageRect(baseSize, STAGE, identity);
+    const leftHalf: Rect = {
+      x: full.x,
+      y: full.y,
+      width: full.width / 2,
+      height: full.height,
+    };
+    const rect = cropRectFromTransform(
+      identity,
+      baseSize,
+      leftHalf,
+      STAGE,
+      LANDSCAPE
+    );
+    expect(rect.originX).toBe(0);
+    expect(rect.width).toBeCloseTo(800, 0);
+    expect(rect.height).toBe(900);
   });
 
-  it('crops the centre band of a landscape image in a square frame', () => {
-    const base = cropBaseSize(LANDSCAPE, frame); // covers 300x300 -> 533x300
-    const rect = cropRectFromTransform(identity, base, frame, LANDSCAPE);
-    // The full height, and a centred square-ish slice of the width.
-    expect(rect.originY).toBe(0);
-    expect(rect.height).toBe(900);
-    expect(rect.width).toBe(900);
-    expect(rect.originX).toBe(Math.round((1600 - 900) / 2));
+  it('follows the frame as it moves right', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const full = imageRect(baseSize, STAGE, identity);
+    const rightHalf: Rect = {
+      x: full.x + full.width / 2,
+      y: full.y,
+      width: full.width / 2,
+      height: full.height,
+    };
+    const rect = cropRectFromTransform(
+      identity,
+      baseSize,
+      rightHalf,
+      STAGE,
+      LANDSCAPE
+    );
+    expect(rect.originX).toBeCloseTo(800, 0);
+    expect(rect.width).toBeCloseTo(800, 0);
   });
 
   it('never returns a rectangle outside the source', () => {
-    const base = cropBaseSize(SQUARE, frame);
+    const { baseSize, frame } = freeSetup(SQUARE);
     for (const transform of [
       { scale: 1, translateX: 99999, translateY: 99999 },
       { scale: 1, translateX: -99999, translateY: -99999 },
       { scale: 6, translateX: 5000, translateY: -5000 },
     ]) {
-      const rect = cropRectFromTransform(transform, base, frame, SQUARE);
+      const rect = cropRectFromTransform(
+        transform,
+        baseSize,
+        frame,
+        STAGE,
+        SQUARE
+      );
       expect(rect.originX).toBeGreaterThanOrEqual(0);
       expect(rect.originY).toBeGreaterThanOrEqual(0);
       expect(rect.originX + rect.width).toBeLessThanOrEqual(SQUARE.width);
@@ -311,37 +487,157 @@ describe('cropRectFromTransform', () => {
   });
 
   it('returns integers, which is what native manipulators require', () => {
-    const base = cropBaseSize({ width: 1333, height: 777 }, frame);
+    const source = { width: 1333, height: 777 };
+    const { baseSize, frame } = freeSetup(source);
     const rect = cropRectFromTransform(
       { scale: 1.37, translateX: 11.3, translateY: -7.9 },
-      base,
+      baseSize,
       frame,
-      { width: 1333, height: 777 }
+      STAGE,
+      source
     );
     for (const value of [rect.originX, rect.originY, rect.width, rect.height]) {
       expect(Number.isInteger(value)).toBe(true);
     }
   });
 
-  it('preserves the frame aspect ratio in the cropped region', () => {
-    const wide: Rect = { x: 0, y: 0, width: 320, height: 180 };
-    const base = cropBaseSize(SQUARE, wide);
-    const rect = cropRectFromTransform(identity, base, wide, SQUARE);
-    expect(rect.width / rect.height).toBeCloseTo(320 / 180, 1);
-  });
-
   it('returns an empty rect for degenerate input rather than NaN', () => {
+    const { frame } = freeSetup(SQUARE);
     expect(
-      cropRectFromTransform(identity, { width: 0, height: 0 }, frame, SQUARE)
+      cropRectFromTransform(
+        identity,
+        { width: 0, height: 0 },
+        frame,
+        STAGE,
+        SQUARE
+      )
     ).toEqual({ originX: 0, originY: 0, width: 0, height: 0 });
     expect(
       cropRectFromTransform(
         { scale: 0, translateX: 0, translateY: 0 },
         { width: 300, height: 300 },
         frame,
+        STAGE,
         SQUARE
       )
     ).toEqual({ originX: 0, originY: 0, width: 0, height: 0 });
+  });
+});
+
+describe('maximizeFrame', () => {
+  it('expands the frame to fill the padded stage', () => {
+    const small: Rect = { x: 40, y: 300, width: 100, height: 100 };
+    const { frame } = maximizeFrame(small, identity, STAGE, PAD);
+    expect(frame.width).toBeCloseTo(360, 5);
+    expect(frame.height).toBeCloseTo(360, 5);
+  });
+
+  it('centres the expanded frame', () => {
+    const small: Rect = { x: 40, y: 300, width: 100, height: 60 };
+    const { frame } = maximizeFrame(small, identity, STAGE, PAD);
+    expect(frame.x + frame.width / 2).toBeCloseTo(STAGE.width / 2, 6);
+    expect(frame.y + frame.height / 2).toBeCloseTo(STAGE.height / 2, 6);
+  });
+
+  it('preserves the frame aspect ratio', () => {
+    for (const shape of [
+      { width: 100, height: 100 },
+      { width: 160, height: 90 },
+      { width: 60, height: 180 },
+    ]) {
+      const small: Rect = { x: 40, y: 200, ...shape };
+      const { frame } = maximizeFrame(small, identity, STAGE, PAD);
+      expect(frame.width / frame.height).toBeCloseTo(
+        shape.width / shape.height,
+        4
+      );
+    }
+  });
+
+  /**
+   * The property the whole animation rests on. If expanding the frame changed
+   * the crop, letting go of a handle would silently alter what you had chosen.
+   */
+  it('leaves the reported crop rectangle identical', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const full = imageRect(baseSize, STAGE, identity);
+
+    const dragged: Rect = {
+      x: full.x + 30,
+      y: full.y + 12,
+      width: full.width * 0.45,
+      height: full.height * 0.6,
+    };
+
+    const before = cropRectFromTransform(
+      identity,
+      baseSize,
+      dragged,
+      STAGE,
+      LANDSCAPE
+    );
+    const next = maximizeFrame(dragged, identity, STAGE, PAD);
+    const after = cropRectFromTransform(
+      next.transform,
+      baseSize,
+      next.frame,
+      STAGE,
+      LANDSCAPE
+    );
+
+    expect(after.originX).toBeCloseTo(before.originX, 0);
+    expect(after.originY).toBeCloseTo(before.originY, 0);
+    expect(after.width).toBeCloseTo(before.width, 0);
+    expect(after.height).toBeCloseTo(before.height, 0);
+  });
+
+  it('preserves the crop from an already-zoomed, already-panned state', () => {
+    const { baseSize } = freeSetup(SQUARE);
+    const start: Transform = { scale: 1.8, translateX: -22, translateY: 14 };
+    const dragged: Rect = { x: 70, y: 250, width: 140, height: 90 };
+
+    const before = cropRectFromTransform(
+      start,
+      baseSize,
+      dragged,
+      STAGE,
+      SQUARE
+    );
+    const next = maximizeFrame(dragged, start, STAGE, PAD);
+    const after = cropRectFromTransform(
+      next.transform,
+      baseSize,
+      next.frame,
+      STAGE,
+      SQUARE
+    );
+
+    expect(after.originX).toBeCloseTo(before.originX, 0);
+    expect(after.originY).toBeCloseTo(before.originY, 0);
+    expect(after.width).toBeCloseTo(before.width, 0);
+    expect(after.height).toBeCloseTo(before.height, 0);
+  });
+
+  it('scales the image up by exactly the factor the frame grew by', () => {
+    const small: Rect = { x: 40, y: 300, width: 90, height: 90 };
+    const next = maximizeFrame(small, identity, STAGE, PAD);
+    expect(next.transform.scale).toBeCloseTo(360 / 90, 6);
+  });
+
+  it('is a no-op for a frame that already fills the stage', () => {
+    const full = frameForAspect(STAGE, 1, PAD);
+    const next = maximizeFrame(full, identity, STAGE, PAD);
+    expect(next.transform.scale).toBeCloseTo(1, 6);
+    expect(next.frame.width).toBeCloseTo(full.width, 6);
+  });
+
+  it('returns its input for degenerate geometry', () => {
+    const frame: Rect = { x: 0, y: 0, width: 0, height: 0 };
+    expect(maximizeFrame(frame, identity, STAGE, PAD).frame).toBe(frame);
+    const ok: Rect = { x: 0, y: 0, width: 10, height: 10 };
+    expect(
+      maximizeFrame(ok, identity, { width: 0, height: 0 }, PAD).frame
+    ).toBe(ok);
   });
 });
 
@@ -381,7 +677,7 @@ describe('nextRotation', () => {
 });
 
 describe('resizeFrame', () => {
-  const bounds: Rect = { x: 0, y: 0, width: 400, height: 800 };
+  const bounds: Rect = { x: 0, y: 0, width: 400, height: 700 };
   const frame: Rect = { x: 100, y: 200, width: 200, height: 200 };
 
   it('moves only the dragged edge when free', () => {
@@ -400,9 +696,17 @@ describe('resizeFrame', () => {
     );
     expect(next.x).toBe(50);
     expect(next.y).toBe(150);
-    // The bottom-right corner has not moved.
     expect(next.x + next.width).toBe(300);
     expect(next.y + next.height).toBe(400);
+  });
+
+  it('is measured from the gesture start, so a repeated delta is idempotent', () => {
+    // Handle deltas are cumulative. Applying the same delta twice to the same
+    // origin must land in the same place — this is what a lagging drag origin
+    // broke, turning a slow drag into a runaway one.
+    const a = resizeFrame(frame, 'bottomRight', { x: 40, y: 40 }, bounds, null);
+    const b = resizeFrame(frame, 'bottomRight', { x: 40, y: 40 }, bounds, null);
+    expect(a).toEqual(b);
   });
 
   it('respects the minimum size', () => {
@@ -415,6 +719,14 @@ describe('resizeFrame', () => {
       64
     );
     expect(next.width).toBeGreaterThanOrEqual(64);
+  });
+
+  it('caps the minimum by what the bounds can hold', () => {
+    // A tiny image must still be croppable rather than locking up.
+    const tiny: Rect = { x: 0, y: 0, width: 40, height: 40 };
+    const next = resizeFrame(tiny, 'right', { x: -9999, y: 0 }, tiny, null, 64);
+    expect(next.width).toBeGreaterThan(0);
+    expect(next.width).toBeLessThanOrEqual(40);
   });
 
   it('never leaves the bounds', () => {
@@ -446,6 +758,22 @@ describe('resizeFrame', () => {
     }
   });
 
+  it('cannot be pulled out past the image', () => {
+    // The caller passes the image's drawn rect as the bounds, so this is the
+    // "handles stop at the photo" rule.
+    const photo: Rect = { x: 20, y: 250, width: 360, height: 200 };
+    const inside: Rect = { x: 100, y: 300, width: 100, height: 100 };
+    const next = resizeFrame(
+      inside,
+      'topLeft',
+      { x: -9999, y: -9999 },
+      photo,
+      null
+    );
+    expect(next.x).toBeGreaterThanOrEqual(photo.x - 1e-6);
+    expect(next.y).toBeGreaterThanOrEqual(photo.y - 1e-6);
+  });
+
   it('keeps a locked ratio when dragging a side handle', () => {
     const next = resizeFrame(frame, 'right', { x: 100, y: 0 }, bounds, 1);
     expect(next.width / next.height).toBeCloseTo(1, 4);
@@ -454,6 +782,12 @@ describe('resizeFrame', () => {
   it('keeps a locked ratio when dragging a corner', () => {
     const next = resizeFrame(frame, 'bottomRight', { x: 80, y: 20 }, bounds, 1);
     expect(next.width / next.height).toBeCloseTo(1, 4);
+  });
+
+  it('drives the ratio from the vertical axis for a top or bottom handle', () => {
+    const next = resizeFrame(frame, 'top', { x: 0, y: -60 }, bounds, 1);
+    expect(next.width / next.height).toBeCloseTo(1, 4);
+    expect(next.y + next.height).toBeCloseTo(frame.y + frame.height, 4);
   });
 
   it('keeps a locked ratio even when clamped by the bounds', () => {
@@ -469,57 +803,12 @@ describe('resizeFrame', () => {
     expect(next.y + next.height).toBeLessThanOrEqual(bounds.height + 1e-6);
   });
 
-  it('drives the ratio from the vertical axis for a top or bottom handle', () => {
-    // A side handle must not fight the corner it is anchored to: dragging the
-    // top edge should resize by height and let width follow.
-    const next = resizeFrame(frame, 'top', { x: 0, y: -60 }, bounds, 1);
-    expect(next.width / next.height).toBeCloseTo(1, 4);
-    // The bottom edge is the anchor and must not move.
-    expect(next.y + next.height).toBeCloseTo(frame.y + frame.height, 4);
-  });
-
-  it('anchors on the bottom-right when dragging the top-left with a locked ratio', () => {
-    const next = resizeFrame(frame, 'topLeft', { x: -40, y: -40 }, bounds, 1);
-    expect(next.width / next.height).toBeCloseTo(1, 4);
-    expect(next.x + next.width).toBeCloseTo(frame.x + frame.width, 4);
-    expect(next.y + next.height).toBeCloseTo(frame.y + frame.height, 4);
-  });
-
-  it('shrinks to fit when a locked ratio overflows the top of the bounds', () => {
-    const tall: Rect = { x: 100, y: 10, width: 200, height: 200 };
-    const next = resizeFrame(tall, 'top', { x: 0, y: -9999 }, bounds, 1);
-    expect(next.y).toBeGreaterThanOrEqual(bounds.y - 1e-6);
-    expect(next.width / next.height).toBeCloseTo(1, 2);
-  });
-
-  it('shrinks to fit when a locked ratio overflows the left of the bounds', () => {
-    const near: Rect = { x: 10, y: 200, width: 200, height: 200 };
-    const next = resizeFrame(near, 'left', { x: -9999, y: 0 }, bounds, 1);
-    expect(next.x).toBeGreaterThanOrEqual(bounds.x - 1e-6);
-    expect(next.width / next.height).toBeCloseTo(1, 2);
-  });
-
-  it('keeps a non-square locked ratio when clamped', () => {
-    const next = resizeFrame(
-      frame,
-      'bottomRight',
-      { x: 9999, y: 9999 },
-      bounds,
-      16 / 9
-    );
-    expect(next.width / next.height).toBeCloseTo(16 / 9, 1);
-    expect(next.x + next.width).toBeLessThanOrEqual(bounds.width + 1e-6);
-    expect(next.y + next.height).toBeLessThanOrEqual(bounds.height + 1e-6);
-  });
-
   it('shrinks to fit when a tall locked ratio pushes the top out of bounds', () => {
-    // A 1:4 ratio turns a 300-wide frame into a 1200-tall one, which cannot fit
-    // above the anchored bottom edge. The frame must shrink rather than escape.
-    const low: Rect = { x: 100, y: 700, width: 200, height: 50 };
+    const low: Rect = { x: 100, y: 600, width: 200, height: 50 };
     const next = resizeFrame(
       low,
       'topLeft',
-      { x: -100, y: -600 },
+      { x: -100, y: -500 },
       bounds,
       0.25
     );
@@ -528,12 +817,9 @@ describe('resizeFrame', () => {
       bounds.y + bounds.height + 1e-6
     );
     expect(next.width).toBeGreaterThan(0);
-    expect(next.height).toBeGreaterThan(0);
   });
 
   it('shrinks to fit when a wide locked ratio pushes a side out of bounds', () => {
-    // Driven by height (a top handle), a 4:1 ratio demands far more width than
-    // the bounds allow.
     const narrow: Rect = { x: 170, y: 400, width: 64, height: 64 };
     const next = resizeFrame(narrow, 'top', { x: 0, y: -300 }, bounds, 4);
     expect(next.x).toBeGreaterThanOrEqual(bounds.x - 1e-6);
@@ -541,21 +827,6 @@ describe('resizeFrame', () => {
       bounds.x + bounds.width + 1e-6
     );
     expect(next.width).toBeGreaterThan(0);
-    expect(next.height).toBeGreaterThan(0);
-  });
-
-  it('respects the minimum size even when shrinking to fit', () => {
-    const tiny: Rect = { x: 0, y: 0, width: 80, height: 80 };
-    const next = resizeFrame(
-      tiny,
-      'bottomRight',
-      { x: 9999, y: 9999 },
-      { x: 0, y: 0, width: 90, height: 90 },
-      1,
-      64
-    );
-    expect(next.width).toBeGreaterThanOrEqual(64 - 1e-6);
-    expect(next.height).toBeGreaterThanOrEqual(64 - 1e-6);
   });
 
   it('is stable under a zero drag', () => {
@@ -628,13 +899,53 @@ describe('ASPECT_PRESETS', () => {
   });
 });
 
-describe('round trip', () => {
+describe('the whole flow', () => {
   /**
-   * The property that matters most: whatever the user frames, the rectangle
-   * handed to the manipulator has the frame's aspect ratio and lies inside the
-   * image. Checked across a sweep rather than at one point.
+   * Drag a handle, let go, and the crop you chose is the crop you get —
+   * expressed end to end rather than function by function.
    */
-  it('produces a valid, correctly-shaped rect across many states', () => {
+  it('a free drag then release reports the region that was framed', () => {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const start = imageRect(baseSize, STAGE, identity);
+
+    // Drag the bottom-right corner in to roughly the top-left quarter.
+    const dragged = resizeFrame(
+      start,
+      'bottomRight',
+      { x: -start.width / 2, y: -start.height / 2 },
+      start,
+      null
+    );
+    const framed = cropRectFromTransform(
+      identity,
+      baseSize,
+      dragged,
+      STAGE,
+      LANDSCAPE
+    );
+
+    // Roughly the top-left quarter of a 1600x900 photo.
+    expect(framed.originX).toBe(0);
+    expect(framed.originY).toBe(0);
+    expect(framed.width).toBeCloseTo(800, -1);
+    expect(framed.height).toBeCloseTo(450, -1);
+
+    // Releasing expands the frame; the crop must not move.
+    const next = maximizeFrame(dragged, identity, STAGE, PAD);
+    const settled = cropRectFromTransform(
+      next.transform,
+      baseSize,
+      next.frame,
+      STAGE,
+      LANDSCAPE
+    );
+    expect(settled.originX).toBeCloseTo(framed.originX, 0);
+    expect(settled.originY).toBeCloseTo(framed.originY, 0);
+    expect(settled.width).toBeCloseTo(framed.width, 0);
+    expect(settled.height).toBeCloseTo(framed.height, 0);
+  });
+
+  it('every preset ratio yields a valid, correctly-shaped rect', () => {
     const sources: Size[] = [
       SQUARE,
       LANDSCAPE,
@@ -642,31 +953,35 @@ describe('round trip', () => {
       { width: 4000, height: 800 },
       { width: 120, height: 90 },
     ];
-    const ratios = [1, 4 / 5, 16 / 9, 3 / 2];
-    const scales = [1, 1.3, 2.7, 5];
 
     for (const source of sources) {
-      for (const ratio of ratios) {
-        const frame = frameForAspect(CONTAINER, ratio, 16);
-        const base = cropBaseSize(source, frame);
-        for (const scale of scales) {
-          const bounds = cropTranslationBounds(base, frame, scale);
-          const transform: Transform = {
-            scale,
-            translateX: bounds.x,
-            translateY: -bounds.y,
-          };
-          const rect = cropRectFromTransform(transform, base, frame, source);
+      const baseSize = cropImageSize(source, STAGE, PAD);
+      for (const ratio of [1, 4 / 5, 16 / 9, 3 / 2]) {
+        const frame = frameForAspect(STAGE, ratio, PAD);
+        const required = minScaleToCover(baseSize, frame);
+        const transform = clampToCover(
+          { scale: required, translateX: 0, translateY: 0 },
+          baseSize,
+          frame,
+          STAGE,
+          required,
+          Math.max(6, required)
+        );
+        const rect = cropRectFromTransform(
+          transform,
+          baseSize,
+          frame,
+          STAGE,
+          source
+        );
 
-          expect(rect.originX).toBeGreaterThanOrEqual(0);
-          expect(rect.originY).toBeGreaterThanOrEqual(0);
-          expect(rect.originX + rect.width).toBeLessThanOrEqual(source.width);
-          expect(rect.originY + rect.height).toBeLessThanOrEqual(source.height);
-          expect(rect.width).toBeGreaterThan(0);
-          expect(rect.height).toBeGreaterThan(0);
-          // Aspect ratio survives, within a pixel of rounding on small images.
-          expect(rect.width / rect.height).toBeCloseTo(ratio, 0);
-        }
+        expect(rect.originX).toBeGreaterThanOrEqual(0);
+        expect(rect.originY).toBeGreaterThanOrEqual(0);
+        expect(rect.originX + rect.width).toBeLessThanOrEqual(source.width);
+        expect(rect.originY + rect.height).toBeLessThanOrEqual(source.height);
+        expect(rect.width).toBeGreaterThan(0);
+        expect(rect.height).toBeGreaterThan(0);
+        expect(rect.width / rect.height).toBeCloseTo(ratio, 0);
       }
     }
   });

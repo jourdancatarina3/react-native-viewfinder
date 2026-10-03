@@ -138,7 +138,7 @@ export const ImageCropper = forwardRef<ImageCropperRef, ImageCropperProps>(
 
     const toolbar = renderToolbar ? (
       renderToolbar({
-        aspectRatio,
+        aspectRatio: cropper.aspectRatio,
         rotation: cropper.rotation,
         flipHorizontal: cropper.flipHorizontal,
         flipVertical: cropper.flipVertical,
@@ -150,7 +150,7 @@ export const ImageCropper = forwardRef<ImageCropperRef, ImageCropperProps>(
       })
     ) : showToolbar ? (
       <CropToolbar
-        aspectRatio={aspectRatio}
+        aspectRatio={cropper.aspectRatio}
         onAspectRatioChange={cropper.setAspectRatio}
         onRotate={() => cropper.rotate(1)}
         onFlipHorizontal={() => cropper.flip('horizontal')}

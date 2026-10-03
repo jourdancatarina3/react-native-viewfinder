@@ -1,5 +1,5 @@
-import { clamp, coverSize, isUsableSize } from './geometry';
-import type { Size, Transform } from './types';
+import { clamp, fitSize, isUsableSize } from './geometry';
+import type { Size, Transform, Vector } from './types';
 
 /**
  * A rectangle in the source image's own pixel coordinates, with its origin at
@@ -53,7 +53,7 @@ export type Rect = {
  */
 export type AspectRatio = number | 'free' | 'original';
 
-/** The eight drag targets on a crop frame, plus the frame body. */
+/** The eight drag targets on a crop frame. */
 export type CropHandle =
   | 'topLeft'
   | 'top'
@@ -63,6 +63,107 @@ export type CropHandle =
   | 'bottom'
   | 'bottomLeft'
   | 'left';
+
+/* --------------------------------------------------------------------------
+ * The model
+ *
+ * The image's layout size depends only on the stage, never on the crop frame.
+ * That separation is the whole design, and getting it wrong is what makes a
+ * crop UI feel broken: if the image is laid out to *cover* the frame, then
+ * dragging a handle resizes the image too, and the picture squirms out from
+ * under your finger.
+ *
+ * So: the image is fitted to the padded stage at scale 1 and transformed about
+ * the stage's centre. The frame is an independent rectangle. The only coupling
+ * is a constraint — the frame must stay inside the image's drawn rect — and it
+ * is enforced by clamping the transform, never by resizing anything.
+ * ----------------------------------------------------------------------- */
+
+/**
+ * The size the image is drawn at when `scale` is 1.
+ *
+ * Fitted to the padded stage, so the whole image is visible to begin with and
+ * the starting frame can sit exactly around it. Depends only on the stage —
+ * changing the crop frame must never change this.
+ */
+export function cropImageSize(
+  source: Size,
+  container: Size,
+  padding = 0
+): Size {
+  'worklet';
+  if (!isUsableSize(container)) {
+    return { width: 0, height: 0 };
+  }
+  return fitSize(source, {
+    width: Math.max(1, container.width - padding * 2),
+    height: Math.max(1, container.height - padding * 2),
+  });
+}
+
+/**
+ * Where the image is actually drawn, in container coordinates.
+ *
+ * Used for two things: the frame's starting shape, and the limit handles may
+ * be dragged to — in iOS you cannot pull a crop handle out past the photo, and
+ * neither can you here.
+ */
+export function imageRect(
+  baseSize: Size,
+  container: Size,
+  transform: Transform
+): Rect {
+  'worklet';
+  if (!isUsableSize(baseSize) || !isUsableSize(container)) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
+  const scale =
+    Number.isFinite(transform.scale) && transform.scale > 0
+      ? transform.scale
+      : 1;
+  const width = baseSize.width * scale;
+  const height = baseSize.height * scale;
+  return {
+    x: container.width / 2 + transform.translateX - width / 2,
+    y: container.height / 2 + transform.translateY - height / 2,
+    width,
+    height,
+  };
+}
+
+/** The intersection of two rectangles, or a zero rect if they do not overlap. */
+export function intersectRects(a: Rect, b: Rect): Rect {
+  'worklet';
+  const x = Math.max(a.x, b.x);
+  const y = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.width, b.x + b.width);
+  const bottom = Math.min(a.y + a.height, b.y + b.height);
+  return {
+    x,
+    y,
+    width: Math.max(0, right - x),
+    height: Math.max(0, bottom - y),
+  };
+}
+
+/**
+ * The crop frame's centre, measured from the container's centre.
+ *
+ * Every transform here is expressed about the container's centre, so this is
+ * the offset that must be threaded through once the frame stops being
+ * centred — which is the moment a handle is dragged. Omitting it is why a
+ * dragged frame can report a crop rectangle that never changes.
+ */
+export function frameCentreOffset(frame: Rect, container: Size): Vector {
+  'worklet';
+  if (!isUsableSize(container)) {
+    return { x: 0, y: 0 };
+  }
+  return {
+    x: frame.x + frame.width / 2 - container.width / 2,
+    y: frame.y + frame.height / 2 - container.height / 2,
+  };
+}
 
 /**
  * Resolves an {@link AspectRatio} to a concrete number, or `null` for free.
@@ -87,8 +188,8 @@ export function resolveAspectRatio(
  * The largest rectangle of a given aspect ratio that fits inside `container`,
  * inset by `padding` and centred.
  *
- * This is the crop frame's resting shape. When the ratio is free, the frame
- * simply fills the padded container and the user drags it from there.
+ * Also the target the frame expands back to after a handle drag — see
+ * {@link maximizeFrame}.
  */
 export function frameForAspect(
   container: Size,
@@ -133,24 +234,8 @@ export function frameForAspect(
 }
 
 /**
- * The size the image is laid out at so that, at scale 1, it exactly covers the
- * crop frame.
- *
- * Covering rather than fitting is what makes the frame impossible to leave
- * empty: the user can only ever zoom further in, never out past the edges.
- */
-export function cropBaseSize(source: Size, frame: Rect): Size {
-  'worklet';
-  return coverSize(source, { width: frame.width, height: frame.height });
-}
-
-/**
- * The furthest the image can be translated while still covering the frame.
- *
- * The crop equivalent of `translationBounds`, measured against the frame
- * rather than the whole container — the area outside the frame is dimmed, so
- * the image is allowed to extend into it, but must never pull away from the
- * frame's edges.
+ * How far the image may be translated, per axis, while still covering the
+ * frame. The range is centred on the *frame's* centre, not the container's.
  */
 export function cropTranslationBounds(
   baseSize: Size,
@@ -169,73 +254,81 @@ export function cropTranslationBounds(
 }
 
 /**
- * Clamps a transform so the image keeps covering the frame.
+ * The smallest scale at which the image still covers the frame.
  *
- * Applied whenever the frame changes shape — a new aspect ratio, a dragged
- * handle, a rotation — as well as on gesture release.
- */
-export function clampToCover(
-  transform: Transform,
-  baseSize: Size,
-  frame: Rect,
-  minScale: number,
-  maxScale: number
-): Transform {
-  'worklet';
-  const scale = clamp(transform.scale, minScale, maxScale);
-  const bounds = cropTranslationBounds(baseSize, frame, scale);
-  return {
-    scale,
-    translateX: clamp(transform.translateX, -bounds.x, bounds.x),
-    translateY: clamp(transform.translateY, -bounds.y, bounds.y),
-  };
-}
-
-/**
- * The smallest scale at which `baseSize` still covers `frame`.
- *
- * After the frame changes shape, the image may no longer reach its edges — a
- * 1:1 frame widened to 16:9, for instance. This is the scale the image must be
- * pushed back out to.
+ * Unlike the gallery's `minScale`, this is not floored at 1: once the frame
+ * has been dragged smaller than the image, zooming out below the fitted size
+ * is legitimate, because the frame is still covered.
  */
 export function minScaleToCover(baseSize: Size, frame: Rect): number {
   'worklet';
   if (!isUsableSize(baseSize) || frame.width <= 0 || frame.height <= 0) {
     return 1;
   }
-  return Math.max(
-    1,
-    frame.width / baseSize.width,
-    frame.height / baseSize.height
-  );
+  return Math.max(frame.width / baseSize.width, frame.height / baseSize.height);
+}
+
+/**
+ * Clamps a transform so the image keeps covering the frame, wherever the frame
+ * happens to be.
+ */
+export function clampToCover(
+  transform: Transform,
+  baseSize: Size,
+  frame: Rect,
+  container: Size,
+  minScale: number,
+  maxScale: number
+): Transform {
+  'worklet';
+  const scale = clamp(transform.scale, minScale, maxScale);
+  const bounds = cropTranslationBounds(baseSize, frame, scale);
+  const centre = frameCentreOffset(frame, container);
+  return {
+    scale,
+    translateX: clamp(
+      transform.translateX,
+      centre.x - bounds.x,
+      centre.x + bounds.x
+    ),
+    translateY: clamp(
+      transform.translateY,
+      centre.y - bounds.y,
+      centre.y + bounds.y
+    ),
+  };
 }
 
 /**
  * Converts what is currently framed into a rectangle in source-image pixels.
  *
- * The derivation, with the frame centred in the container so that the frame's
- * centre is the transform's origin:
+ * The derivation, in base units measured from the image's own centre:
  *
- * - The content point under the frame's centre is `-translate / scale`, in
- *   base units measured from the content's own centre.
+ * - A content point `c` is drawn at `translate + scale · c`, relative to the
+ *   container's centre.
+ * - So the content point under the **frame's** centre is
+ *   `(frameCentre − translate) / scale`, where `frameCentre` is the frame's
+ *   offset from the container's centre.
  * - The frame's half-extents in base units are `frame / (2 · scale)`.
  * - Base units convert to source pixels by `k = source.width / base.width`.
  * - The source's origin is its top-left, so half the source size is added back.
  *
- * The result is clamped to the image's bounds and rounded, because a crop
- * rectangle that runs half a pixel outside the source throws in most native
+ * Edges are then intersected with the image and rounded: a crop rectangle that
+ * runs even half a pixel outside the source throws in most native
  * manipulators.
  */
 export function cropRectFromTransform(
   transform: Transform,
   baseSize: Size,
   frame: Rect,
+  container: Size,
   sourceSize: Size
 ): CropRect {
   'worklet';
   if (
     !isUsableSize(baseSize) ||
     !isUsableSize(sourceSize) ||
+    !isUsableSize(container) ||
     frame.width <= 0 ||
     frame.height <= 0 ||
     !Number.isFinite(transform.scale) ||
@@ -246,22 +339,21 @@ export function cropRectFromTransform(
 
   const k = sourceSize.width / baseSize.width;
   const scale = transform.scale;
+  const centre = frameCentreOffset(frame, container);
 
-  const centreX = -transform.translateX / scale;
-  const centreY = -transform.translateY / scale;
+  const contentX = (centre.x - transform.translateX) / scale;
+  const contentY = (centre.y - transform.translateY) / scale;
   const halfWidth = frame.width / (2 * scale);
   const halfHeight = frame.height / (2 * scale);
 
-  const rawX = sourceSize.width / 2 + (centreX - halfWidth) * k;
-  const rawY = sourceSize.height / 2 + (centreY - halfHeight) * k;
+  const rawX = sourceSize.width / 2 + (contentX - halfWidth) * k;
+  const rawY = sourceSize.height / 2 + (contentY - halfHeight) * k;
   const rawWidth = (frame.width * k) / scale;
   const rawHeight = (frame.height * k) / scale;
 
-  // Intersect with the image, keeping at least one pixel on each axis. Clamping
-  // the origin and the size independently is not enough: an origin pushed to
-  // the far edge leaves no room, and the size collapses to zero — which every
-  // native manipulator rejects. Clamping the edges instead keeps the rectangle
-  // valid no matter what transform is handed in.
+  // Intersect with the image, keeping at least one pixel on each axis.
+  // Clamping the origin and the size independently is not enough: an origin
+  // pushed to the far edge leaves no room, and the size collapses to zero.
   const left = clamp(rawX, 0, Math.max(0, sourceSize.width - 1));
   const top = clamp(rawY, 0, Math.max(0, sourceSize.height - 1));
   const right = clamp(rawX + rawWidth, left + 1, sourceSize.width);
@@ -283,6 +375,62 @@ export function cropRectFromTransform(
       1,
       Math.max(1, Math.floor(sourceSize.height) - originY)
     ),
+  };
+}
+
+/**
+ * Expands a dragged frame back out to fill the stage, and says how the image
+ * must move to keep the same content framed.
+ *
+ * This is the step that makes a crop screen feel like the iOS one. After you
+ * let go of a handle, the frame does not sit there small and off to one side:
+ * it animates out to the largest rectangle of that shape the stage can hold,
+ * centred, while the photo zooms and slides underneath so that exactly the
+ * same crop stays inside it.
+ *
+ * The returned transform is derived, not guessed. With `k` the ratio of the
+ * new frame's width to the old one's, keeping the content point under the old
+ * frame's centre at the new frame's centre requires:
+ *
+ *     scale′     = scale · k
+ *     translate′ = −k · (frameCentre − translate)
+ *
+ * Substituting back shows the framed content point and the half-extents are
+ * both unchanged, so `cropRectFromTransform` returns an identical rectangle
+ * before and after.
+ */
+export function maximizeFrame(
+  frame: Rect,
+  transform: Transform,
+  container: Size,
+  padding = 0
+): { frame: Rect; transform: Transform } {
+  'worklet';
+  if (
+    !isUsableSize(container) ||
+    frame.width <= 0 ||
+    frame.height <= 0 ||
+    !Number.isFinite(transform.scale) ||
+    transform.scale <= 0
+  ) {
+    return { frame, transform };
+  }
+
+  const target = frameForAspect(container, frame.width / frame.height, padding);
+  if (target.width <= 0) {
+    return { frame, transform };
+  }
+
+  const k = target.width / frame.width;
+  const centre = frameCentreOffset(frame, container);
+
+  return {
+    frame: target,
+    transform: {
+      scale: transform.scale * k,
+      translateX: -k * (centre.x - transform.translateX),
+      translateY: -k * (centre.y - transform.translateY),
+    },
   };
 }
 
@@ -316,7 +464,9 @@ export function nextRotation(rotation: Rotation, turns = 1): Rotation {
  * 2. With a locked aspect ratio, the other axis follows, pivoting about the
  *    anchor corner rather than the centre — otherwise the frame appears to
  *    slide sideways as you drag.
- * 3. The frame is never smaller than `minSize`, and never leaves `bounds`.
+ * 3. The frame is never smaller than `minSize`, and never leaves `bounds` —
+ *    which the caller sets to the image's drawn rect, so a handle cannot be
+ *    pulled out past the photo.
  *
  * @param handle - which handle is being dragged
  * @param delta - movement since the gesture began, in container coordinates
@@ -326,7 +476,7 @@ export function nextRotation(rotation: Rotation, turns = 1): Rotation {
 export function resizeFrame(
   frame: Rect,
   handle: CropHandle,
-  delta: { x: number; y: number },
+  delta: Vector,
   bounds: Rect,
   aspectRatio: number | null,
   minSize = 64
@@ -334,6 +484,13 @@ export function resizeFrame(
   'worklet';
   const dx = Number.isFinite(delta.x) ? delta.x : 0;
   const dy = Number.isFinite(delta.y) ? delta.y : 0;
+
+  // A frame smaller than two minimums cannot be dragged at all, so the minimum
+  // is capped by what the bounds can actually hold.
+  const limit = Math.max(
+    8,
+    Math.min(minSize, bounds.width / 2, bounds.height / 2)
+  );
 
   let left = frame.x;
   let top = frame.y;
@@ -350,16 +507,16 @@ export function resizeFrame(
     handle === 'bottom' || handle === 'bottomLeft' || handle === 'bottomRight';
 
   if (movesLeft) {
-    left = clamp(left + dx, bounds.x, right - minSize);
+    left = clamp(left + dx, bounds.x, right - limit);
   }
   if (movesRight) {
-    right = clamp(right + dx, left + minSize, bounds.x + bounds.width);
+    right = clamp(right + dx, left + limit, bounds.x + bounds.width);
   }
   if (movesTop) {
-    top = clamp(top + dy, bounds.y, bottom - minSize);
+    top = clamp(top + dy, bounds.y, bottom - limit);
   }
   if (movesBottom) {
-    bottom = clamp(bottom + dy, top + minSize, bounds.y + bounds.height);
+    bottom = clamp(bottom + dy, top + limit, bounds.y + bounds.height);
   }
 
   let width = right - left;
@@ -406,8 +563,8 @@ export function resizeFrame(
       const factor = clamp(shrink, 0, 1);
       const centreX = (left + right) / 2;
       const centreY = (top + bottom) / 2;
-      width = Math.max(minSize, width * factor);
-      height = Math.max(minSize / aspectRatio, height * factor);
+      width = Math.max(limit, width * factor);
+      height = Math.max(limit / aspectRatio, height * factor);
 
       // Shrinking about the old centre is not enough. When the ratio demanded
       // far more room than exists, that centre is itself outside the bounds,

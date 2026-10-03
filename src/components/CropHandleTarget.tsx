@@ -5,6 +5,7 @@ import { runOnJS } from 'react-native-reanimated';
 import type { PanEvent } from '../compat/gestures';
 import { GestureDetector, usePan } from '../compat/gestures';
 import type { CropHandle, Rect } from '../core/crop';
+import { useStableCallback } from '../hooks/useStableCallback';
 
 export type CropHandleTargetProps = {
   handle: CropHandle;
@@ -35,23 +36,32 @@ function CropHandleTargetComponent({
   onEnd,
   testID,
 }: CropHandleTargetProps) {
+  // Gesture callbacks are captured when the gesture is built and never again,
+  // so the handlers must not change identity. Without this the handle keeps
+  // calling the very first `onStart`/`onMove` it ever saw — which close over
+  // the frame as it was at mount, a zero-sized rectangle — and dragging a
+  // handle does nothing at all.
+  const emitStart = useStableCallback(onStart);
+  const emitMove = useStableCallback(onMove);
+  const emitEnd = useStableCallback(onEnd);
+
   const gesture = usePan({
     // Handles must win over the image pan underneath them, which they do by
     // being later in the tree; no explicit relation is needed.
     onStart: () => {
       'worklet';
-      runOnJS(onStart)();
+      runOnJS(emitStart)();
     },
     onUpdate: (event: PanEvent) => {
       'worklet';
-      runOnJS(onMove)(handle, {
+      runOnJS(emitMove)(handle, {
         x: event.translationX,
         y: event.translationY,
       });
     },
     onEnd: () => {
       'worklet';
-      runOnJS(onEnd)();
+      runOnJS(emitEnd)();
     },
   });
 

@@ -34,6 +34,16 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+/** Collapses a style array into one object, as React Native would. */
+function flatten(style: unknown): { left: number; top: number } {
+  const parts = Array.isArray(style) ? style.flat(Infinity) : [style];
+  const merged = Object.assign({}, ...parts.filter(Boolean)) as {
+    left?: number;
+    top?: number;
+  };
+  return { left: merged.left ?? 0, top: merged.top ?? 0 };
+}
+
 async function setup(props: Record<string, unknown> = {}) {
   const ref = createRef<ImageCropperRef>();
   const view = await render(
@@ -108,25 +118,35 @@ describe('ImageCropper', () => {
   });
 
   describe('image layout', () => {
-    it('sizes the image to cover the crop frame, not to fit it', async () => {
-      const { SpyImage, last } = makeSpyImage();
-      const view = await render(
-        <ImageCropper
-          source={SOURCE}
-          width={1600}
-          height={900}
-          aspectRatio={1}
-          ImageComponent={SpyImage}
-          testID="c"
-        />
-      );
-      await layout(view, 400, 700);
+    it('lays the image out from the stage, never from the crop frame', async () => {
+      // The image is fitted to the padded stage and stays that size whatever
+      // the frame does. Sizing it to cover the frame instead is what made
+      // dragging a handle resize the picture out from under the finger.
+      const sizes: { width: number; height: number }[] = [];
+      for (const ratio of ['free' as const, 1, 16 / 9]) {
+        const { SpyImage, last } = makeSpyImage();
+        const view = await render(
+          <ImageCropper
+            source={SOURCE}
+            width={1600}
+            height={900}
+            aspectRatio={ratio}
+            ImageComponent={SpyImage}
+            testID="c"
+          />
+        );
+        await layout(view, 400, 700);
+        sizes.push(last()?.style as { width: number; height: number });
+      }
 
-      // A 1:1 frame in a 400x700 stage with 20pt padding is 360x360.
-      // A 16:9 image covering 360x360 is 640x360.
-      const style = last()?.style as { width: number; height: number };
-      expect(style.height).toBeCloseTo(360, 0);
-      expect(style.width).toBeGreaterThanOrEqual(360);
+      // 1600x900 fitted into a 360x660 padded stage -> 360x202.5
+      expect(sizes[0]!.width).toBeCloseTo(360, 0);
+      expect(sizes[0]!.height).toBeCloseTo(202.5, 0);
+      // Identical for every aspect ratio.
+      for (const size of sizes) {
+        expect(size.width).toBeCloseTo(sizes[0]!.width, 3);
+        expect(size.height).toBeCloseTo(sizes[0]!.height, 3);
+      }
     });
 
     it('never leaves the frame uncovered for any aspect ratio', async () => {
@@ -172,21 +192,23 @@ describe('ImageCropper', () => {
       expect(crop.height).toBe(900);
     });
 
-    it('a free crop still allows any frame shape afterwards', async () => {
-      // `lockedRatio` stays null for free, so nothing constrains a handle drag.
+    it('switching back to free keeps the crop and only unlocks the handles', async () => {
+      // iOS behaviour: tapping Freeform after Square leaves the square crop
+      // where it is. Snapping back to the whole image would throw away the
+      // crop someone had just chosen.
       const { ref } = await setup({ aspectRatio: 'free' });
       await act(async () => {
         ref.current?.setAspectRatio(1);
       });
-      expect(ref.current!.getResult()!.crop.width).toBe(
-        ref.current!.getResult()!.crop.height
-      );
+      const square = ref.current!.getResult()!.crop;
+      expect(square.width).toBe(square.height);
+
       await act(async () => {
         ref.current?.setAspectRatio('free');
       });
-      const { crop } = ref.current!.getResult()!;
-      expect(crop.width).toBe(1600);
-      expect(crop.height).toBe(900);
+      const after = ref.current!.getResult()!.crop;
+      expect(after.width).toBe(square.width);
+      expect(after.height).toBe(square.height);
     });
 
     it('returns the whole image when nothing has been changed', async () => {
@@ -315,7 +337,10 @@ describe('ImageCropper', () => {
       const result = ref.current!.getResult()!;
       expect(result.rotate).toBe(0);
       expect(result.flipHorizontal).toBe(false);
+      // Back to the whole image, even though the ratio being reset away from
+      // was a square one.
       expect(result.crop.width).toBe(1600);
+      expect(result.crop.height).toBe(900);
     });
   });
 
@@ -384,6 +409,44 @@ describe('ImageCropper', () => {
       });
       expect(view.getByTestId('c-toolbar-aspect-Square')).toBeTruthy();
       expect(view.queryByTestId('c-toolbar-aspect-4:5')).toBeNull();
+    });
+  });
+
+  describe('frame handles', () => {
+    /**
+     * Handles are rendered from the live frame, so their positions are a
+     * readable proxy for where the frame actually is — and they caught the
+     * bug where the handles were wired to a stale, zero-sized frame and
+     * dragging did nothing at all.
+     */
+    it('positions the handles around the image for a free crop', async () => {
+      const { view } = await setup({ aspectRatio: 'free' });
+      const topLeft = view.getByTestId('c-overlay-handle-topLeft');
+      const bottomRight = view.getByTestId('c-overlay-handle-bottomRight');
+
+      const tl = flatten(topLeft.props.style);
+      const br = flatten(bottomRight.props.style);
+
+      // Not stacked at the origin, which is what a zero-sized frame produces.
+      expect(br.left).toBeGreaterThan(tl.left + 100);
+      expect(br.top).toBeGreaterThan(tl.top + 50);
+    });
+
+    it('moves the handles when the ratio changes', async () => {
+      const { ref, view } = await setup({ aspectRatio: 'free' });
+      const before = flatten(
+        view.getByTestId('c-overlay-handle-bottomRight').props.style
+      );
+
+      await act(async () => {
+        ref.current?.setAspectRatio(1);
+      });
+
+      const after = flatten(
+        view.getByTestId('c-overlay-handle-bottomRight').props.style
+      );
+      // A 1:1 frame is much taller than the fitted 16:9 image.
+      expect(after.top).toBeGreaterThan(before.top);
     });
   });
 
