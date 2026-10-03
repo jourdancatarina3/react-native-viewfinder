@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -33,18 +33,6 @@ export function CropScreen() {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // ERR_PROBE (temporary): surface JS errors on screen so they can be read
-  // from a screenshot without a debugger attached.
-  useEffect(() => {
-    const original = console.error;
-    console.error = (...args: unknown[]) => {
-      setError(String(args[0]).slice(0, 200));
-      original(...args);
-    };
-    return () => {
-      console.error = original;
-    };
-  }, []);
 
   async function crop() {
     const result = cropper.current?.getResult();
@@ -110,7 +98,7 @@ export function CropScreen() {
           {region ? `${region.crop.width}×${region.crop.height}` : 'measuring…'}
         </Text>
         {error ? (
-          <Text style={styles.error} numberOfLines={3} testID="crop-error">
+          <Text style={styles.error} numberOfLines={1} testID="crop-error">
             {error}
           </Text>
         ) : null}
