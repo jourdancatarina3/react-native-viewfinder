@@ -20,6 +20,7 @@ import {
   nextRotation,
   reframe,
   resizeFrame,
+  resizeFrameRevealing,
   resolveAspectRatio,
   rotateCropRect,
   rotatedSize,
@@ -1353,5 +1354,141 @@ describe('composeMappings', () => {
     const [first] = mappings;
     expect(composeMappings(IDENTITY_MAPPING, first)).toEqual(first);
     expect(composeMappings(first, IDENTITY_MAPPING)).toEqual(first);
+  });
+});
+
+describe('resizeFrameRevealing', () => {
+  const STAGE_RECT: Rect = {
+    x: PAD,
+    y: PAD,
+    width: STAGE.width - PAD * 2,
+    height: STAGE.height - PAD * 2,
+  };
+
+  /**
+   * A crop of the photo's left third that has re-centred: the frame fills the
+   * stage's width and the rest of the photo is hidden off to the right.
+   */
+  function zoomedIn() {
+    const { baseSize } = freeSetup(LANDSCAPE);
+    const full = imageRect(baseSize, STAGE, identity);
+    const small: Rect = {
+      x: full.x,
+      y: full.y + 40,
+      width: full.width / 3,
+      height: full.height / 2,
+    };
+    const { frame, transform } = maximizeFrame(small, identity, STAGE, PAD);
+    const image = imageRect(baseSize, STAGE, transform);
+    const pull = (dx: number, dy = 0, handle: 'right' | 'top' = 'right') =>
+      resizeFrameRevealing(
+        frame,
+        transform,
+        handle,
+        { x: dx, y: dy },
+        image,
+        STAGE_RECT,
+        STAGE,
+        null,
+        72,
+        40
+      );
+    const crop = (r: { frame: Rect; transform: Transform }) =>
+      cropRectFromTransform(r.transform, baseSize, r.frame, STAGE, LANDSCAPE);
+    return { baseSize, frame, transform, pull, crop };
+  }
+
+  it('is a plain resize while the frame stays inside the stage', () => {
+    const { frame, transform, pull } = zoomedIn();
+    const inward = pull(-60);
+    expect(inward.transform).toEqual(transform);
+    expect(inward.frame.width).toBeCloseTo(frame.width - 60, 6);
+  });
+
+  it('zooms the photo out once the frame reaches the edge', () => {
+    const { frame, transform, pull } = zoomedIn();
+    const pulled = pull(10);
+    expect(pulled.transform.scale).toBeLessThan(transform.scale);
+    // The frame stays pinned to the stage's edge rather than leaving it.
+    expect(pulled.frame.x + pulled.frame.width).toBeCloseTo(
+      STAGE_RECT.x + STAGE_RECT.width,
+      6
+    );
+    expect(pulled.frame.x).toBeCloseTo(frame.x, 6);
+  });
+
+  it('grows the crop on the pulled side and keeps the other side put', () => {
+    const { frame, transform, pull, crop } = zoomedIn();
+    const before = crop({ frame, transform });
+    const after = crop(pull(10));
+    expect(after.width).toBeGreaterThan(before.width);
+    expect(Math.abs(after.originX - before.originX)).toBeLessThanOrEqual(1);
+  });
+
+  it('brings back everything hidden once pulled the reveal distance', () => {
+    const { pull, crop } = zoomedIn();
+    const after = crop(pull(40));
+    expect(after.originX + after.width).toBeGreaterThanOrEqual(
+      LANDSCAPE.width - 1
+    );
+  });
+
+  it('never grows the crop past the photo', () => {
+    const { pull, crop } = zoomedIn();
+    const after = crop(pull(4000));
+    expect(after.originX + after.width).toBeLessThanOrEqual(LANDSCAPE.width);
+    expect(after.originX).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps the photo covering the frame however far it is pulled', () => {
+    const { baseSize, pull } = zoomedIn();
+    for (const dx of [5, 20, 40, 400]) {
+      const { frame, transform } = pull(dx);
+      const drawn = imageRect(baseSize, STAGE, transform);
+      expect(frame.x).toBeGreaterThanOrEqual(drawn.x - 1e-6);
+      expect(frame.y).toBeGreaterThanOrEqual(drawn.y - 1e-6);
+      expect(frame.x + frame.width).toBeLessThanOrEqual(
+        drawn.x + drawn.width + 1e-6
+      );
+      expect(frame.y + frame.height).toBeLessThanOrEqual(
+        drawn.y + drawn.height + 1e-6
+      );
+    }
+  });
+
+  it('keeps the frame inside the stage however far it is pulled', () => {
+    const { pull } = zoomedIn();
+    for (const [dx, dy, handle] of [
+      [400, 0, 'right'],
+      [0, -900, 'top'],
+    ] as const) {
+      const { frame } = pull(dx, dy, handle);
+      expect(frame.x).toBeGreaterThanOrEqual(STAGE_RECT.x - 1e-6);
+      expect(frame.y).toBeGreaterThanOrEqual(STAGE_RECT.y - 1e-6);
+      expect(frame.x + frame.width).toBeLessThanOrEqual(
+        STAGE_RECT.x + STAGE_RECT.width + 1e-6
+      );
+      expect(frame.y + frame.height).toBeLessThanOrEqual(
+        STAGE_RECT.y + STAGE_RECT.height + 1e-6
+      );
+    }
+  });
+
+  it('changes nothing for a photo that is not zoomed in', () => {
+    const { baseSize, frame } = freeSetup(LANDSCAPE);
+    const image = imageRect(baseSize, STAGE, identity);
+    const pulled = resizeFrameRevealing(
+      frame,
+      identity,
+      'right',
+      { x: 80, y: 0 },
+      image,
+      STAGE_RECT,
+      STAGE,
+      null
+    );
+    // The whole photo is already in view: there is nothing to reveal.
+    expect(pulled.transform).toEqual(identity);
+    expect(pulled.frame).toEqual(frame);
   });
 });

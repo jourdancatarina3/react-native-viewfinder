@@ -261,8 +261,9 @@ Only `source` is required.
 It behaves like the Photos app. Drag a handle and the photo holds still under it; let go,
 and after a short pause the frame grows back to fill the screen while the photo zooms to
 keep exactly what you framed. Grab another handle during the pause and nothing moves in
-between. Pinch and pan move the photo under the frame and spring back if they would leave
-a gap. A quarter turn or a flip keeps your crop and turns or mirrors it with the picture,
+between. To open a crop back up, pull a handle out past the edge of the screen: the frame
+stays at the edge and the photo zooms out under it to bring back what was cut off. Pinch and
+pan move the photo under the frame and spring back if they would leave a gap. A quarter turn or a flip keeps your crop and turns or mirrors it with the picture,
 the photo and its frame moving as one piece.
 
 | Prop | Type | Default | Description |

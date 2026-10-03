@@ -18,6 +18,7 @@ import type { PanEvent, PinchEvent, TapEvent } from '../compat/gestures';
 import { usePan, usePinch, useSimultaneous, useTap } from '../compat/gestures';
 import {
   CROP_ANIMATION_DURATION,
+  CROP_REVEAL_DISTANCE,
   CROP_SETTLE_DELAY,
   RUBBER_BAND_COEFFICIENT,
 } from '../core/constants';
@@ -41,13 +42,12 @@ import {
   frameCentreOffset,
   frameForAspect,
   imageRect,
-  intersectRects,
   maximizeFrame,
   minScaleToCover,
   mirrorCropRect,
   nextRotation,
   reframe,
-  resizeFrame,
+  resizeFrameRevealing,
   resolveAspectRatio,
   rotateCropRect,
   rotatedSize,
@@ -350,7 +350,9 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   const panStart = useSharedValue({ x: 0, y: 0 });
   const panRebase = useSharedValue(false);
   const dragOrigin = useSharedValue<Rect>(EMPTY_RECT);
-  const dragBounds = useSharedValue<Rect>(EMPTY_RECT);
+  const dragTransform = useSharedValue<Transform>(IDENTITY);
+  const dragImage = useSharedValue<Rect>(EMPTY_RECT);
+  const dragStage = useSharedValue<Rect>(EMPTY_RECT);
 
   useEffect(() => {
     padding.value = framePadding;
@@ -972,42 +974,49 @@ export function useCropper(options: UseCropperOptions): UseCropperResult {
   // --- Frame handles ------------------------------------------------------
 
   /**
-   * Begins a handle drag. The image stays exactly where it is for the whole
-   * drag — the frame moves over it — and the handles may not be pulled out
-   * past the photo or the stage.
+   * Begins a handle drag. Inside the stage the photo holds still and the
+   * frame moves over it; pulled past the stage's edge, the photo zooms out
+   * under a frame pinned to the edge, which is how a crop that has zoomed in
+   * is opened back up. The frame never outgrows the photo.
    */
   const beginFrameDrag = () => {
     'worklet';
     interrupt();
     dragOrigin.value = readFrame();
+    dragTransform.value = readTransform();
     const c = container.value;
     const p = padding.value;
-    dragBounds.value = intersectRects(
-      imageRect(base.value, c, readTransform()),
-      {
-        x: p,
-        y: p,
-        width: Math.max(0, c.width - p * 2),
-        height: Math.max(0, c.height - p * 2),
-      }
-    );
+    dragImage.value = imageRect(base.value, c, dragTransform.value);
+    dragStage.value = {
+      x: p,
+      y: p,
+      width: Math.max(0, c.width - p * 2),
+      height: Math.max(0, c.height - p * 2),
+    };
   };
 
   /** Moves a handle. `dx`/`dy` are measured from the drag's start. */
   const dragFrame = (handle: CropHandle, dx: number, dy: number) => {
     'worklet';
-    const next = resizeFrame(
+    const next = resizeFrameRevealing(
       dragOrigin.value,
+      dragTransform.value,
       handle,
       { x: dx, y: dy },
-      dragBounds.value,
+      dragImage.value,
+      dragStage.value,
+      container.value,
       lockedRatio.value > 0 ? lockedRatio.value : null,
-      minFrame.value
+      minFrame.value,
+      CROP_REVEAL_DISTANCE
     );
-    frameX.value = next.x;
-    frameY.value = next.y;
-    frameWidth.value = next.width;
-    frameHeight.value = next.height;
+    frameX.value = next.frame.x;
+    frameY.value = next.frame.y;
+    frameWidth.value = next.frame.width;
+    frameHeight.value = next.frame.height;
+    scale.value = next.transform.scale;
+    translateX.value = next.transform.translateX;
+    translateY.value = next.transform.translateY;
   };
 
   const endFrameDrag = () => {

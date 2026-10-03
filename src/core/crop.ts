@@ -922,6 +922,157 @@ export function resizeFrame(
 }
 
 /**
+ * A handle drag that can open a zoomed-in crop back up.
+ *
+ * Inside the stage this is {@link resizeFrame}, with the photo held still.
+ * Past the stage's edge the frame cannot follow the finger any further, so
+ * the photo zooms out instead, pivoting on the edges the handle does not
+ * move: the frame stays pinned to the stage and more of the picture slides
+ * into it. That is how you undo a crop by dragging it bigger again, as in the
+ * Photos app.
+ *
+ * The finger has little room left past the edge, so travel there is scaled
+ * to what is hidden: pulling `revealDistance` past an edge brings back
+ * everything beyond it. The frame never grows past the photo itself, so the
+ * photo always still covers it.
+ *
+ * @param origin - the frame when the drag began
+ * @param transform - the photo's transform when the drag began
+ * @param delta - movement since the drag began
+ * @param image - where the photo was drawn when the drag began
+ * @param stage - the padded stage the frame must stay inside
+ */
+export function resizeFrameRevealing(
+  origin: Rect,
+  transform: Transform,
+  handle: CropHandle,
+  delta: Vector,
+  image: Rect,
+  stage: Rect,
+  container: Size,
+  aspectRatio: number | null,
+  minSize = 64,
+  revealDistance = 40
+): { frame: Rect; transform: Transform } {
+  'worklet';
+  const movesLeft =
+    handle === 'left' || handle === 'topLeft' || handle === 'bottomLeft';
+  const movesRight =
+    handle === 'right' || handle === 'topRight' || handle === 'bottomRight';
+  const movesTop =
+    handle === 'top' || handle === 'topLeft' || handle === 'topRight';
+  const movesBottom =
+    handle === 'bottom' || handle === 'bottomLeft' || handle === 'bottomRight';
+
+  let dx = Number.isFinite(delta.x) ? delta.x : 0;
+  let dy = Number.isFinite(delta.y) ? delta.y : 0;
+  const reach = Math.max(1, revealDistance);
+  const stageRight = stage.x + stage.width;
+  const stageBottom = stage.y + stage.height;
+
+  // Travel past an edge, scaled so `reach` of it reveals all that is hidden.
+  const amplify = (over: number, hidden: number) => {
+    'worklet';
+    return over * Math.max(1, hidden / reach);
+  };
+  if (movesRight) {
+    const over = origin.x + origin.width + dx - stageRight;
+    if (over > 0) {
+      dx += amplify(over, image.x + image.width - stageRight) - over;
+    }
+  } else if (movesLeft) {
+    const over = stage.x - (origin.x + dx);
+    if (over > 0) {
+      dx -= amplify(over, stage.x - image.x) - over;
+    }
+  }
+  if (movesBottom) {
+    const over = origin.y + origin.height + dy - stageBottom;
+    if (over > 0) {
+      dy += amplify(over, image.y + image.height - stageBottom) - over;
+    }
+  } else if (movesTop) {
+    const over = stage.y - (origin.y + dy);
+    if (over > 0) {
+      dy -= amplify(over, stage.y - image.y) - over;
+    }
+  }
+
+  // Where the frame would go if the stage were unlimited: bounded only by
+  // the photo.
+  const wanted = resizeFrame(
+    origin,
+    handle,
+    { x: dx, y: dy },
+    image,
+    aspectRatio,
+    minSize
+  );
+
+  // The point that stays put. resizeFrame grows a locked frame away from its
+  // left and top edges when the handle does not move them, and a free frame
+  // keeps both, so the pivot is the middle.
+  const locked = aspectRatio !== null && aspectRatio > 0;
+  const anchorX = movesLeft
+    ? wanted.x + wanted.width
+    : movesRight || locked
+      ? wanted.x
+      : wanted.x + wanted.width / 2;
+  const anchorY = movesTop
+    ? wanted.y + wanted.height
+    : movesBottom || locked
+      ? wanted.y
+      : wanted.y + wanted.height / 2;
+
+  // The largest zoom-out that brings the wanted frame back inside the stage.
+  const fit = (
+    anchor: number,
+    low: number,
+    high: number,
+    min: number,
+    max: number
+  ) => {
+    'worklet';
+    let k = 1;
+    if (high > max && high > anchor) {
+      k = Math.min(k, (max - anchor) / (high - anchor));
+    }
+    if (low < min && low < anchor) {
+      k = Math.min(k, (anchor - min) / (anchor - low));
+    }
+    return k;
+  };
+  const k = Math.max(
+    1e-3,
+    Math.min(
+      fit(anchorX, wanted.x, wanted.x + wanted.width, stage.x, stageRight),
+      fit(anchorY, wanted.y, wanted.y + wanted.height, stage.y, stageBottom)
+    )
+  );
+  if (k >= 1) {
+    return { frame: wanted, transform };
+  }
+
+  // Zoom the whole scene — frame and photo — out about the anchor. Scaling
+  // both together keeps the photo covering the frame.
+  const pivotX = anchorX - container.width / 2;
+  const pivotY = anchorY - container.height / 2;
+  return {
+    frame: {
+      x: anchorX + (wanted.x - anchorX) * k,
+      y: anchorY + (wanted.y - anchorY) * k,
+      width: wanted.width * k,
+      height: wanted.height * k,
+    },
+    transform: {
+      scale: transform.scale * k,
+      translateX: pivotX + (transform.translateX - pivotX) * k,
+      translateY: pivotY + (transform.translateY - pivotY) * k,
+    },
+  };
+}
+
+/**
  * Whether a crop is the whole image — used to decide if "Reset" should be
  * offered, and to skip a pointless round-trip through the manipulator when the
  * user has not actually cropped anything.

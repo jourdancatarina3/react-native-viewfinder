@@ -66,6 +66,17 @@ export const CROP_ANIMATION_DURATION = 360;
  */
 export const CROP_SETTLE_DELAY = 600;
 
+/**
+ * How far, in points, a handle must be pulled past the edge of the stage to
+ * bring back everything hidden beyond that edge.
+ *
+ * Once a crop has zoomed in, its frame already reaches the edge of the stage,
+ * and a finger has only a sliver of screen left beyond it. So pulling past the
+ * edge zooms the photo out rather than moving the frame, at a rate scaled to
+ * how much photo is left to reveal: this far is all of it.
+ */
+export const CROP_REVEAL_DISTANCE = 24;
+
 /** Spring used when settling the image back inside its bounds. */
 export const SETTLE_SPRING = {
   damping: 30,

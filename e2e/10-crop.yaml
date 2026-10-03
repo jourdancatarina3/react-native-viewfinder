@@ -114,6 +114,19 @@ name: Crop, rotate, flip
     id: 'crop-readout'
     text: ${maestro.copiedText}
 
+# Pulling a handle out past the edge opens the crop back up: the photo zooms
+# out under the frame and the region grows again.
+- swipe:
+    from:
+      id: 'cropper-overlay-handle-right'
+    direction: RIGHT
+- waitForAnimationToEnd
+- assertNotVisible:
+    id: 'crop-readout'
+    text: ${maestro.copiedText}
+- copyTextFrom:
+    id: 'crop-readout'
+
 # And the file is exactly that region.
 - tapOn:
     id: 'crop-apply'
